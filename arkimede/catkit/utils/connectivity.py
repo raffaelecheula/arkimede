@@ -140,86 +140,89 @@ def get_cutoff_neighbors(
 
 def get_connectivity(
     atoms,
-    method          = 'cutoff',
-    cutoff_dict     = {},
-    mask            = None,
-    scale_cov_radii = 1.,
-    add_cov_radii   = 0.2,
-    attach_graph    = True,
-    atoms_template  = None,
-    print_matrix    = False,
-    bond_indices    = None,
+    method="cutoff",
+    cutoff_dict={},
+    mask=None,
+    scale_cov_radii=1.0,
+    add_cov_radii=0.2,
+    attach_graph=True,
+    atoms_template=None,
+    print_matrix=False,
+    bond_indices=None,
 ):
-    
-    if method == 'cutoff':
-        
+
+    if method == "cutoff":
+
         cutoff_dict_copy = cutoff_dict.copy()
         for symbol in [
-            symbol for symbol in atoms.get_chemical_symbols()
+            symbol
+            for symbol in atoms.get_chemical_symbols()
             if symbol not in cutoff_dict
         ]:
             cutoff_dict_copy[symbol] = covalent_radii[atomic_numbers[symbol]]
-        
+
         radii = [
-            cutoff_dict_copy[a.symbol]*scale_cov_radii+add_cov_radii
-            for a in atoms
+            cutoff_dict_copy[a.symbol] * scale_cov_radii + add_cov_radii for a in atoms
         ]
-        
+
         if mask is not None:
-            radii = [radii[i] if mask[i] else 0. for i in range(len(radii))]
-        
+            radii = [radii[i] if mask[i] else 0.0 for i in range(len(radii))]
+
         connectivity = get_cutoff_neighbors(atoms, radii=radii)
-    
+
         if atoms_template is not None:
             n_atoms = len(atoms_template)
-            connectivity[:n_atoms,:n_atoms] = atoms_template.connectivity
-    
-    elif method == 'voronoi':
-        
+            connectivity[:n_atoms, :n_atoms] = atoms_template.connectivity
+
+    elif method == "voronoi":
+
         connectivity = get_voronoi_neighbors(atoms)
-    
+
     if bond_indices is not None:
         aa, bb = bond_indices
-        connectivity[aa,bb] = 1.
-        connectivity[bb,aa] = 1.
-    
+        connectivity[aa, bb] = 1.0
+        connectivity[bb, aa] = 1.0
+
     if attach_graph is True:
         atoms._graph = from_numpy_matrix(
-            A              = connectivity, 
-            create_using   = nx.MultiGraph, 
-            parallel_edges = True,
+            A=connectivity,
+            create_using=nx.MultiGraph,
+            parallel_edges=True,
         )
-    
+
     return connectivity
 
 
-def plot_connectivity(atoms, connectivity = None, max_dist = None):
-    
+def plot_connectivity(atoms, connectivity=None, max_dist=None):
+
     import matplotlib.pyplot as plt
-    
+
     atoms = atoms.copy()
-    
+
     if connectivity is not None:
         graph = from_numpy_matrix(connectivity)
     else:
         graph = atoms.graph
-    
+
     if max_dist is None:
         max_dist = np.max(atoms.cell.lengths())
-    
+
     pos = atoms.positions
     nodes_xyz = np.array([pos[v] for v in sorted(graph)])
-    edges_xyz = np.array([
-        (pos[u], pos[v]) for u, v in graph.edges()
-        if np.linalg.norm(pos[u]-pos[v]) < max_dist
-    ])
+    edges_xyz = np.array(
+        [
+            (pos[u], pos[v])
+            for u, v in graph.edges()
+            if np.linalg.norm(pos[u] - pos[v]) < max_dist
+        ]
+    )
 
     fig = plt.figure(figsize=(8, 8), dpi=120)
-    ax = fig.add_subplot(111, projection = "3d")
-    ax.scatter(*nodes_xyz.T, s = 500, ec = "w")
+    ax = fig.add_subplot(111, projection="3d")
+    ax.scatter(*nodes_xyz.T, s=500, ec="w")
 
     for edge in edges_xyz:
-        ax.plot(*edge.T, color = "tab:gray")
+        ax.plot(*edge.T, color="tab:gray")
 
     ax.grid(False)
     for dim in (ax.xaxis, ax.yaxis, ax.zaxis):
@@ -227,14 +230,14 @@ def plot_connectivity(atoms, connectivity = None, max_dist = None):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_zlabel("z")
-    
+
     ax.xaxis.pane.fill = False
     ax.yaxis.pane.fill = False
     ax.zaxis.pane.fill = False
-    ax.xaxis.pane.set_edgecolor('w')
-    ax.yaxis.pane.set_edgecolor('w')
-    ax.zaxis.pane.set_edgecolor('w')
-    ax.set_aspect('equal', adjustable='box')
+    ax.xaxis.pane.set_edgecolor("w")
+    ax.yaxis.pane.set_edgecolor("w")
+    ax.zaxis.pane.set_edgecolor("w")
+    ax.set_aspect("equal", adjustable="box")
     fig.tight_layout()
-    
+
     plt.show()

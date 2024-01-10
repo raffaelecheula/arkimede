@@ -50,9 +50,9 @@ def get_idpp_interpolated_images(
 ):
     """Get idpp interpolated images with strict optimization parameters."""
     
-    images = [atoms_IS]
+    images = [atoms_IS.copy()]
     images += [atoms_IS.copy() for i in range(n_images-2)]
-    images += [atoms_FS]
+    images += [atoms_FS.copy()]
     neb = NEB(images = images)
     neb.interpolate()
     idpp_interpolate(
@@ -75,22 +75,28 @@ def get_idpp_interpolated_images(
 # GET ATOMS TS FROM IMAGES NEB
 # -----------------------------------------------------------------------------
 
-def get_atoms_TS_from_images_neb(images, index_TS=None):
+def get_atoms_TS_from_images_neb(images, atoms_TS=None, index_TS=None):
     """Get the atoms of the TS guess and the vector for dimer calculation 
     from the NEB images."""
 
     if index_TS is None:
         index_TS = np.argmax([image.get_potential_energy() for image in images])
 
-    atoms_TS = images[index_TS].copy()
+    if atoms_TS is None:
+        atoms_TS = images[index_TS].copy()
+    else:
+        atoms_TS.set_positions(images[index_TS].positions)
+        atoms_TS.info["converged"] = images[index_TS].info["converged"]
+    
     vector = np.zeros((len(atoms_TS), 3))
     if index_TS > 0:
         vector += atoms_TS.positions-images[index_TS-1].positions
     if index_TS < len(images)-1:
         vector += images[index_TS+1].positions-atoms_TS.positions
     vector /= np.linalg.norm(vector)
+    atoms_TS.info["vector"] = vector
     
-    return atoms_TS, vector
+    return atoms_TS
 
 # -----------------------------------------------------------------------------
 # CHECK NEW IS AND FS

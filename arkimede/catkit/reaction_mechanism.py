@@ -900,6 +900,172 @@ class MechanismBuilder(AdsorptionSites):
 
         return slabs
 
+    def single_adsorption(
+        self, adsorbate, bond, sites, site_index=0, auto_construct=True, slab=None,
+    ):
+        """Attach an adsorbate to one active site."""
+
+        atoms_ads = adsorbate.copy()
+        site = int(sites[site_index])
+        vector = self.get_adsorption_vector(site=site)
+        if slab is None:
+            slab = self.slab
+        slab = slab.copy()
+
+        # Improved position estimate for site.
+        r1top = self.r1_topology[site]
+        r_site = covalent_radii[slab[self.index_surf[r1top]].numbers]
+        r_bond = covalent_radii[atoms_ads.numbers[bond]]
+        base_position = trilaterate(
+            self.coords_surf[r1top], r_bond + r_site, vector
+        )
+
+        atoms_ads.translate(-atoms_ads.positions[bond])
+
+        if auto_construct is True:
+            atoms_ads = get_3D_positions(atoms_ads, bond, site_natoms=len(r1top))
+        elif auto_construct == "autorotate":
+            succ = nx.dfs_successors(atoms_ads.graph, bond)
+            if bond in succ:
+                a1 = sum([atoms_ads[int(ii)].position for ii in succ[bond]])
+                a2 = [0, 0, 1]
+                atoms_ads.rotate(a1, a2)
+
+        if self.connections[site] == 2:
+            coords_brg = self.coords_surf[r1top]
+            direction = coords_brg[1][:2] - coords_brg[0][:2]
+            angle = np.arctan(direction[1] / (direction[0] + 1e-10))
+            atoms_ads.rotate(angle * 180 / np.pi, "z")
+
+        # Align with the adsorption vector
+        atoms_ads.rotate([0, 0, 1], vector)
+
+        atoms_ads.translate(base_position)
+        n_atoms_slab = len(slab)
+        slab += atoms_ads
+
+        # Add graph connections
+        for surf_index in self.index_surf[r1top]:
+            slab.graph.add_edge(surf_index, bond + n_atoms_slab)
+
+        # Store site numbers
+        if "site_numbers" in slab.info:
+            slab.info["site_numbers"] += [[site]]
+        else:
+            slab.info["site_numbers"] = [[site]]
+
+        # Get adsorption site tag
+        tags = [self.get_site_tag(int(s)) for s in sites]
+        tag_num = len([tag for tag in tags[:site_index] if tag == tags[site_index]])
+        slab.info["site_tag"] = tags[site_index]
+        slab.info["tag_num"] = tag_num
+
+        slab.info["site_id"] = self.get_site_id(site)
+
+        return slab
+
+    def double_adsorption(
+        self,
+        adsorbate,
+        bonds,
+        edges,
+        edge_index=0,
+        auto_construct=False,
+        slab=None,
+        r_mult=0.95,
+        n_iter_max=10,
+        dn_thr=1e-5,
+    ):
+        """Attach an adsorbate to two active sites."""
+
+        atoms_ads = adsorbate.copy()
+        graph_ads = atoms_ads.graph
+        edge = edges[edge_index]
+        coords_edge = self.coordinates[edge]
+        if slab is None:
+            slab = self.slab
+        slab = slab.copy()
+
+        if auto_construct is True:
+            atoms_ads = branch_bidentate(atoms_ads, bonds)
+            atoms_ads = rotate_bidentate(atoms_ads, bonds)
+        elif auto_construct == "autorotate":
+            atoms_ads = rotate_bidentate(atoms_ads, bonds)
+
+        # Get adsorption vector
+        zvectors = [self.get_adsorption_vector_edge(edge=edge)] * 2
+
+        old_positions = [atoms_ads[bonds[0]].position, atoms_ads[bonds[1]].position]
+        new_positions = coords_edge.copy()
+
+        # Iterate to position the adsorbate close to all the atoms of the edge
+        for i in range(n_iter_max):
+            r_bonds = covalent_radii[atoms_ads.numbers[bonds]] * r_mult
+            for i, r1top in enumerate(self.r1_topology[edge]):
+                r_site = covalent_radii[slab[self.index_surf[r1top]].numbers] * r_mult
+                new_positions[i] = trilaterate(
+                    self.coords_surf[r1top], r_bonds[i] + r_site, zvector=zvectors[i]
+                )
+
+            v_site = new_positions[1] - new_positions[0]
+            d_site = np.linalg.norm(v_site)
+            uvec0 = v_site / d_site
+            v_bond = old_positions[1] - old_positions[0]
+            d_bond = np.linalg.norm(v_bond)
+            dn = (d_bond - d_site) / 2
+
+            new_positions = [
+                new_positions[0] - uvec0 * dn,
+                new_positions[1] + uvec0 * dn,
+            ]
+
+            for i in range(2):
+                zvectors[i] = new_positions[i] - coords_edge[i]
+                zvectors[i] /= np.linalg.norm(zvectors[i])
+
+            if abs(dn) < dn_thr:
+                break
+
+        # Calculate the new adsorption vector, perpendicular to new uvec0.
+        uvec2 = np.cross((zvectors[0] + zvectors[1]) / 2.0, uvec0)
+        uvec1 = np.cross(uvec0, uvec2)
+
+        a1 = old_positions[1] - old_positions[0]
+        a2 = new_positions[1] - new_positions[0]
+        b1 = [0, 0, 1]
+        b2 = uvec1
+        rot_matrix = rotation_matrix(a1, a2, b1, b2)
+
+        # Rotate the adsorbate in the direction of the edge
+        for k, _ in enumerate(atoms_ads):
+            atoms_ads[k].position = np.dot(atoms_ads[k].position, rot_matrix.T)
+
+        # Translate the adsorbate on the new (updated) edge positions
+        atoms_ads.translate(new_positions[0] - old_positions[0])
+
+        n_atoms_slab = len(slab)
+        slab += atoms_ads
+
+        # Add graph connections
+        for i, r1top in enumerate(self.r1_topology[edge]):
+            for surf_index in self.index_surf[r1top]:
+                slab.graph.add_edge(surf_index, bonds[i] + n_atoms_slab)
+
+        # Store site numbers
+        if "site_numbers" in slab.info:
+            slab.info["site_numbers"] += [edge.tolist()]
+        else:
+            slab.info["site_numbers"] = [edge.tolist()]
+
+        # Get adsorption site tag
+        tags = [self.get_site_tag(ee) for ee in edges]
+        tag_num = len([tag for tag in tags[:edge_index] if tag == tags[edge_index]])
+        slab.info["site_tag"] = tags[edge_index]
+        slab.info["tag_num"] = tag_num
+        slab.info["site_id"] = self.get_site_id(edge)
+
+        return slab
+
     def add_adsorbate_ranges(
         self,
         adsorbate,
@@ -1101,13 +1267,12 @@ class MechanismBuilder(AdsorptionSites):
             slabs_products = [slabs_products[ii] for ii in indices]
 
         for slab in slabs_products:
-            site_numbers = slabs_products[i].info["site_numbers"]
-            slab.info["site_numbers"] = site_numbers
+            slab.info["bonds_TS"] = [[bb+n_atoms_clean for bb in bond_break]+['break']]
             slab.info["site_tag"] = "_".join(
-                [self.get_site_tag(index=index) for index in site_numbers]
+                [self.get_site_tag(index=index) for index in slab.info["site_numbers"]]
             )
             slab.info["site_id"] = "+".join(
-                [self.get_site_id(index=index) for index in site_numbers]
+                [self.get_site_id(index=index) for index in slab.info["site_numbers"]]
             )
 
         return slabs_products
@@ -1178,172 +1343,6 @@ class MechanismBuilder(AdsorptionSites):
             distance += np.sum(norm)
 
         return distance
-
-    def single_adsorption(
-        self, adsorbate, bond, sites, site_index=0, auto_construct=True, slab=None
-    ):
-        """Attach an adsorbate to one active site."""
-
-        atoms_ads = adsorbate.copy()
-        site = int(sites[site_index])
-        vector = self.get_adsorption_vector(site=site)
-        if slab is None:
-            slab = self.slab
-        slab = slab.copy()
-
-        # Improved position estimate for site.
-        r1top = self.r1_topology[site]
-        r_site = covalent_radii[slab[self.index_surf[r1top]].numbers]
-        r_bond = covalent_radii[atoms_ads.numbers[bond]]
-        base_position = trilaterate(
-            self.coords_surf[r1top], r_bond + r_site, vector
-        )
-
-        atoms_ads.translate(-atoms_ads.positions[bond])
-
-        if auto_construct is True:
-            atoms_ads = get_3D_positions(atoms_ads, bond, site_natoms=len(r1top))
-        elif auto_construct == "autorotate":
-            succ = nx.dfs_successors(atoms_ads.graph, bond)
-            if bond in succ:
-                a1 = sum([atoms_ads[int(ii)].position for ii in succ[bond]])
-                a2 = [0, 0, 1]
-                atoms_ads.rotate(a1, a2)
-
-        if self.connections[site] == 2:
-            coords_brg = self.coords_surf[r1top]
-            direction = coords_brg[1][:2] - coords_brg[0][:2]
-            angle = np.arctan(direction[1] / (direction[0] + 1e-10))
-            atoms_ads.rotate(angle * 180 / np.pi, "z")
-
-        # Align with the adsorption vector
-        atoms_ads.rotate([0, 0, 1], vector)
-
-        atoms_ads.translate(base_position)
-        n_atoms_slab = len(slab)
-        slab += atoms_ads
-
-        # Add graph connections
-        for surf_index in self.index_surf[r1top]:
-            slab.graph.add_edge(surf_index, bond + n_atoms_slab)
-
-        # Store site numbers
-        if "site_numbers" in slab.info:
-            slab.info["site_numbers"] += [[site]]
-        else:
-            slab.info["site_numbers"] = [[site]]
-
-        # Get adsorption site tag
-        tags = [self.get_site_tag(int(s)) for s in sites]
-        tag_num = len([tag for tag in tags[:site_index] if tag == tags[site_index]])
-        slab.info["site_tag"] = tags[site_index]
-        slab.info["tag_num"] = tag_num
-
-        slab.info["site_id"] = self.get_site_id(site)
-
-        return slab
-
-    def double_adsorption(
-        self,
-        adsorbate,
-        bonds,
-        edges,
-        edge_index=0,
-        auto_construct=False,
-        slab=None,
-        r_mult=0.95,
-        n_iter_max=10,
-        dn_thr=1e-5,
-    ):
-        """Attach an adsorbate to two active sites."""
-
-        atoms_ads = adsorbate.copy()
-        graph_ads = atoms_ads.graph
-        edge = edges[edge_index]
-        coords_edge = self.coordinates[edge]
-        if slab is None:
-            slab = self.slab
-        slab = slab.copy()
-
-        if auto_construct is True:
-            atoms_ads = branch_bidentate(atoms_ads, bonds)
-            atoms_ads = rotate_bidentate(atoms_ads, bonds)
-        elif auto_construct == "autorotate":
-            atoms_ads = rotate_bidentate(atoms_ads, bonds)
-
-        # Get adsorption vector
-        zvectors = [self.get_adsorption_vector_edge(edge=edge)] * 2
-
-        old_positions = [atoms_ads[bonds[0]].position, atoms_ads[bonds[1]].position]
-        new_positions = coords_edge.copy()
-
-        # Iterate to position the adsorbate close to all the atoms of the edge
-        for i in range(n_iter_max):
-            r_bonds = covalent_radii[atoms_ads.numbers[bonds]] * r_mult
-            for i, r1top in enumerate(self.r1_topology[edge]):
-                r_site = covalent_radii[slab[self.index_surf[r1top]].numbers] * r_mult
-                new_positions[i] = trilaterate(
-                    self.coords_surf[r1top], r_bonds[i] + r_site, zvector=zvectors[i]
-                )
-
-            v_site = new_positions[1] - new_positions[0]
-            d_site = np.linalg.norm(v_site)
-            uvec0 = v_site / d_site
-            v_bond = old_positions[1] - old_positions[0]
-            d_bond = np.linalg.norm(v_bond)
-            dn = (d_bond - d_site) / 2
-
-            new_positions = [
-                new_positions[0] - uvec0 * dn,
-                new_positions[1] + uvec0 * dn,
-            ]
-
-            for i in range(2):
-                zvectors[i] = new_positions[i] - coords_edge[i]
-                zvectors[i] /= np.linalg.norm(zvectors[i])
-
-            if abs(dn) < dn_thr:
-                break
-
-        # Calculate the new adsorption vector, perpendicular to new uvec0.
-        uvec2 = np.cross((zvectors[0] + zvectors[1]) / 2.0, uvec0)
-        uvec1 = np.cross(uvec0, uvec2)
-
-        a1 = old_positions[1] - old_positions[0]
-        a2 = new_positions[1] - new_positions[0]
-        b1 = [0, 0, 1]
-        b2 = uvec1
-        rot_matrix = rotation_matrix(a1, a2, b1, b2)
-
-        # Rotate the adsorbate in the direction of the edge
-        for k, _ in enumerate(atoms_ads):
-            atoms_ads[k].position = np.dot(atoms_ads[k].position, rot_matrix.T)
-
-        # Translate the adsorbate on the new (updated) edge positions
-        atoms_ads.translate(new_positions[0] - old_positions[0])
-
-        n_atoms_slab = len(slab)
-        slab += atoms_ads
-
-        # Add graph connections
-        for i, r1top in enumerate(self.r1_topology[edge]):
-            for surf_index in self.index_surf[r1top]:
-                slab.graph.add_edge(surf_index, bonds[i] + n_atoms_slab)
-
-        # Store site numbers
-        if "site_numbers" in slab.info:
-            slab.info["site_numbers"] += [edge.tolist()]
-        else:
-            slab.info["site_numbers"] = [edge.tolist()]
-
-        # Get adsorption site tag
-        tags = [self.get_site_tag(ee) for ee in edges]
-        tag_num = len([tag for tag in tags[:edge_index] if tag == tags[edge_index]])
-        slab.info["site_tag"] = tags[edge_index]
-        slab.info["tag_num"] = tag_num
-        slab.info["site_id"] = self.get_site_id(edge)
-
-        return slab
 
     def get_site_tag(self, index):
         """Return the tag of an active site."""

@@ -3,6 +3,7 @@
 # -----------------------------------------------------------------------------
 
 import numpy as np
+from ase.calculators.singlepoint import SinglePointCalculator
 from .utilities import get_atoms_not_fixed
 
 # -----------------------------------------------------------------------------
@@ -19,13 +20,21 @@ def run_relax_calculation(
     """Run a relax calculation."""
     from ase.optimize import BFGS
 
-    atoms.calc = calc
+    atoms_copy = atoms.copy()
+    atoms_copy.calc = calc
     opt = BFGS(
-        atoms = atoms,
-        trajectory = f'{name}_relax.traj' if name else None,
+        atoms=atoms_copy,
+        trajectory=f'{name}_relax.traj' if name else None,
     )
-    opt.run(fmax = fmax)
-    return atoms
+    converged = opt.run(fmax=fmax, steps=steps_max)
+    
+    atoms.set_positions(atoms_copy.positions)
+    atoms.calc = SinglePointCalculator(
+        atoms=atoms,
+        energy=atoms_copy.calc.results['energy'],
+        forces=atoms_copy.calc.results['forces'],
+    )
+    atoms.info["converged"] = bool(converged)
 
 # -----------------------------------------------------------------------------
 # RUN NEB CALCULATION
@@ -59,7 +68,6 @@ def run_neb_calculation(
         )
     else:
         from ase.neb import NEB
-        from ase.calculators.singlepoint import SinglePointCalculator
         neb = NEB(
             images = images,
             k = k_neb,
@@ -74,8 +82,8 @@ def run_neb_calculation(
             images[ii].get_potential_energy()
             images[ii].calc = SinglePointCalculator(
                 atoms = images[ii],
-                energy = images[ii].calc.results['energy'],
-                forces = images[ii].calc.results['forces'],
+                energy = images[ii].calc.results["energy"],
+                forces = images[ii].calc.results["forces"],
             )
     
     if use_NEBOptimizer:
@@ -117,7 +125,8 @@ def run_neb_calculation(
         for image in images:
             traj.write(image)
     
-    return images, converged
+    for image in images:
+        image.info["converged"] = bool(converged)
 
 # -----------------------------------------------------------------------------
 # RUN DIMER CALCULATION
@@ -160,7 +169,7 @@ def run_dimer_calculation(
         control = dimer_control,
         mask = mask,
     )
-    atoms_dimer.displace(displacement_vector = vector)
+    atoms_dimer.displace(displacement_vector=vector, mask=mask)
 
     opt = MinModeTranslate(
         atoms = atoms_dimer,
@@ -184,10 +193,15 @@ def run_dimer_calculation(
 
     if bonds_TS and reset_eigenmode:
         opt.attach(reset_eigenmode_obs, interval = 1)
-    opt.run(fmax = fmax)
+    converged = opt.run(fmax = fmax)
+    
     atoms.set_positions(atoms_dimer.positions)
-
-    return atoms
+    atoms.calc = SinglePointCalculator(
+        atoms = atoms,
+        energy = atoms_dimer.calc.results['energy'],
+        forces = atoms_dimer.calc.results['forces'],
+    )
+    atoms.info["converged"] = bool(converged)
 
 # -----------------------------------------------------------------------------
 # RUN CLIMBBONDS CALCULATION
@@ -213,23 +227,30 @@ def run_climbbonds_calculation(
     opt = ODE12r(
         atoms = atoms_copy,
         trajectory = f'{name}_climbbonds.traj' if name else None,
-        alpha = 150,
     )
-    opt.run(fmax = fmax)
+    converged = opt.run(fmax = fmax)
+    
     atoms.set_positions(atoms_copy.positions)
-
-    return atoms
+    atoms.calc = SinglePointCalculator(
+        atoms = atoms,
+        energy = atoms_copy.calc.results['energy'],
+        forces = atoms_copy.calc.results['forces'],
+    )
+    atoms.info["converged"] = bool(converged)
 
 # -----------------------------------------------------------------------------
 # RUN VIBRATIONS CALCULATION
 # -----------------------------------------------------------------------------
 
-def run_vibrations_calculation(atoms):
+def run_vibrations_calculation(atoms, calc):
     
     from ase.vibrations import Vibrations
     
+    atoms_copy = atoms.copy()
+    atoms_copy.calc = calc
+    
     indices = get_atoms_not_fixed(atoms)
-    vib = Vibrations(atoms, indices = indices, delta = 0.01, nfree = 2)
+    vib = Vibrations(atoms=atoms_copy, indices=indices, delta=0.01, nfree=2)
     vib.run()
 
     return vib.get_frequencies()

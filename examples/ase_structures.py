@@ -29,6 +29,23 @@ lattice_const_dict = {
     "Ga": 4.52,
 }
 
+# Materials parameters.
+repetitions_dict = {
+    "100": (3, 3),
+    "110": (3, 2),
+    "111": (3, 3),
+    "210": (2, 2),
+    "211": (3, 1),
+    "221": (3, 1),
+    "310": (2, 1),
+    "320": (2, 1),
+    "311": (3, 2),
+    "321": (2, 1),
+    "331": (3, 1),
+    "110c": (3, 1),
+    "311c": (3, 1),
+}
+
 # -----------------------------------------------------------------------------
 # GET ATOMS SLAB
 # -----------------------------------------------------------------------------
@@ -39,12 +56,16 @@ def get_atoms_slab(
     miller_index,
     element_dopant=None,
     number_dopant=0,
+    bulk_structure="fcc",
     lattice_const=None,
     repetitions=None,
     magnetic_elements=("Co", "Ni", "Fe"),
     vacuum=10.0,
     delta_ncoord=0,
 ):
+
+    if repetitions is None:
+        repetitions = repetitions_dict[miller_index]
 
     if lattice_const is None:
         lattice_const = lattice_const_dict[element_bulk]
@@ -128,7 +149,13 @@ def get_atoms_slab(
         orthogonal = True
 
     a_init = 5.0
-    atoms_bulk = bulk(name="X", a=a_init, crystalstructure="fcc", primitive=True,)
+    atoms_bulk = bulk(
+        name="X",
+        a=a_init,
+        crystalstructure=bulk_structure,
+        primitive=True,
+    )
+    atoms_bulk.info["name"] = "-".join([bulk_structure, element_bulk])
 
     atoms_slab = surface(
         elements=atoms_bulk,
@@ -219,12 +246,16 @@ def get_atoms_slab(
     magmoms = [1.0 if a.symbol in magnetic_elements else 0.0 for a in atoms_slab]
     atoms_slab.set_initial_magnetic_moments(magmoms=magmoms)
 
-    if number_dopant == 0 or element_dopant == element_bulk:
-        surf_structure = f"{element_bulk}"
-    else:
-        surf_structure = f"{element_bulk}+{element_dopant}{number_dopant}"
+    # Get name and build atoms.info
+    surf_structure = atoms_bulk.info["name"][:]
+    if number_dopant > 0:
+        surf_structure += f"+{element_dopant}{number_dopant}"
+
+    repetitions_str = "x".join([str(i) for i in repetitions])
+    name = "_".join([surf_structure, miller_index, repetitions_str])
 
     atoms_slab.info = {
+        "name": name,
         "structure_type": "clean",
         "n_atoms_clean": len(atoms_slab),
         "element_bulk": element_bulk,

@@ -14,6 +14,7 @@ class MechanismCalculator:
     def __init__(
         self,
         atoms_clean,
+        calc,
         get_atoms_gas_fun,
         range_edges,
         displ_max_reaction,
@@ -22,6 +23,7 @@ class MechanismCalculator:
         topology_sym=False,
     ):
         self.atoms_clean = atoms_clean
+        self.calc = calc
         self.get_atoms_gas_fun = get_atoms_gas_fun # This could be a dictionary
         self.range_edges = range_edges
         self.displ_max_reaction = displ_max_reaction
@@ -33,7 +35,7 @@ class MechanismCalculator:
 
         # Setup the builder of adsorption data.
         self.builder = MechanismBuilder(
-            slab=atoms_clean,
+            slab=self.atoms_clean,
             tol=1e-5,
             cutoff=self.lattice_const,
         )
@@ -55,6 +57,17 @@ class MechanismCalculator:
                 symmetric_ads=adsorbate.info["symmetric_ads"],
                 topology_sym=self.topology_sym,
             )
+
+            for atoms_ads in atoms_ads_list:
+                atoms_ads.info["clean_name"] = self.atoms_clean.info["name"]
+                atoms_ads.info["ads_name"] = adsorbate.info["ads_name"]
+                atoms_ads.info["name"] = "_".join(
+                    [
+                        atoms_ads.info["clean_name"],
+                        atoms_ads.info["ads_name"],
+                        atoms_ads.info["site_id"]
+                    ]
+                )
 
             atoms_ads_tot += atoms_ads_list
 
@@ -95,6 +108,17 @@ class MechanismCalculator:
                 )
                 
                 for slab_reactants in slab_reactants_list:
+                    slab_reactants.info["clean_name"] = self.atoms_clean.info["name"]
+                    slab_reactants.info["ads_name"] = reactants_str
+                    slab_reactants.info["name"] = "_".join(
+                        [
+                            slab_reactants.info["clean_name"],
+                            slab_reactants.info["ads_name"],
+                            slab_reactants.info["site_id"]
+                        ]
+                    )
+                
+                for slab_reactants in slab_reactants_list:
 
                     slab_products_list = self.builder.dissociation_reaction(
                         products=products,
@@ -111,7 +135,16 @@ class MechanismCalculator:
                     )
 
                     for slab_products in slab_products_list:
-                        atoms_neb_tot.append([slab_reactants.copy(), slab_products])
+                        slab_products.info["clean_name"] = self.atoms_clean.info["name"]
+                        slab_products.info["ads_name"] = products_str
+                        slab_products.info["name"] = "_".join(
+                            [
+                                slab_products.info["clean_name"],
+                                slab_products.info["ads_name"],
+                                slab_products.info["site_id"]
+                            ]
+                        )
+                        atoms_neb_tot.append([slab_reactants, slab_products])
 
         return atoms_neb_tot
 
