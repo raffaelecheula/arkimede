@@ -34,6 +34,7 @@ def run_relax_calculation(
         energy=atoms_copy.calc.results['energy'],
         forces=atoms_copy.calc.results['forces'],
     )
+    atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
 # -----------------------------------------------------------------------------
@@ -76,8 +77,8 @@ def run_neb_calculation(
             method = 'aseneb',
             allow_shared_calculator = True,
         )
-        for image in images:
-            image.calc = calc
+        for atoms in images:
+            atoms.calc = calc
         for ii in (0, -1):
             images[ii].get_potential_energy()
             images[ii].calc = SinglePointCalculator(
@@ -122,11 +123,12 @@ def run_neb_calculation(
     if name and converged:
         from ase.io import Trajectory
         traj = Trajectory(filename = f'{name}_neb.traj', mode = 'w')
-        for image in images:
-            traj.write(image)
+        for atoms in images:
+            traj.write(atoms)
     
-    for image in images:
-        image.info["converged"] = bool(converged)
+    for atoms in images:
+        atoms.info["modified"] = False
+        atoms.info["converged"] = bool(converged)
 
 # -----------------------------------------------------------------------------
 # RUN DIMER CALCULATION
@@ -201,6 +203,8 @@ def run_dimer_calculation(
         energy = atoms_dimer.calc.results['energy'],
         forces = atoms_dimer.calc.results['forces'],
     )
+    atoms.info["vector"] = opt.eigenmodes[0]
+    atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
 # -----------------------------------------------------------------------------
@@ -236,14 +240,15 @@ def run_climbbonds_calculation(
         energy = atoms_copy.calc.results['energy'],
         forces = atoms_copy.calc.results['forces'],
     )
+    atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
 # -----------------------------------------------------------------------------
 # RUN VIBRATIONS CALCULATION
 # -----------------------------------------------------------------------------
 
-def run_vibrations_calculation(atoms, calc):
-    
+def run_vibrations_calculation(atoms, calc, clean=True):
+    """Run a vibrations calculation."""
     from ase.vibrations import Vibrations
     
     atoms_copy = atoms.copy()
@@ -252,6 +257,9 @@ def run_vibrations_calculation(atoms, calc):
     indices = get_atoms_not_fixed(atoms)
     vib = Vibrations(atoms=atoms_copy, indices=indices, delta=0.01, nfree=2)
     vib.run()
+
+    if clean is True:
+        vib.clean()
 
     return vib.get_frequencies()
 

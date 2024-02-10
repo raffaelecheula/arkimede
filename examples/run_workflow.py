@@ -2,6 +2,7 @@
 # IMPORTS
 # -----------------------------------------------------------------------------
 
+import os
 import timeit
 import numpy as np
 import copy as cp
@@ -33,6 +34,9 @@ range_coads_fun = lambda lc: [
     lc * np.sqrt(2.0) / 2.0 + 1e-3,
 ]
 
+# Save trajectories and write images.
+save_trajectories = False
+
 # Show initial structures.
 show_sites = False
 show_gas_init = False
@@ -47,19 +51,28 @@ show_neb_init = False
 db_ase_name = "database_test.db"
 db_ase_append = True
 
-fmax = 0.01
+fmax = 0.05
 steps_max_relax = 300
 steps_max_neb = 100
 n_images_neb = 10
-search_TS = "dimer" # dimer | climbbonds | climbfixinter
+search_TS = "climbbonds" # dimer | climbbonds | climbfixinter
+
+checkpoint_key = (
+    #'GemNet-OC OC20+OC22'
+    #'EquiformerV2 (153M) All+MD'
+    #'eSCN-L6-M3-Lay20 All+MD'
+    #'SCN All+MD'
+    #'GemNet-OC-Large All+MD'
+    #'GemNet-dT 2M'
+    'EquiformerV2 (31M) All+MD'
+)
 
 checkpoint_path = get_checkpoint_path(
-    key = 'GemNet-dT 2M',
+    key = checkpoint_key,
     basedir = checkpoints_basedir(),
 )
 calc = OCPCalculator(
     checkpoint_path = checkpoint_path,
-    trainer = 'forces',
     cpu = False,
 )
 
@@ -95,7 +108,7 @@ miller_index_list = [
 # Adsorbates names.
 ads_name_list = [
     #"CO2[s]",
-    "CO2[ss]",
+    #"CO2[ss]",
     #"cCOOH[s]",
     #"cCOOH[ss]",
     #"tCOOH[s]",
@@ -105,7 +118,7 @@ ads_name_list = [
     #"HCO[s]",
     #"HCO[ss]",
     #"H2O[s]",
-    "CO[s]",
+    #"CO[s]",
     #"H[s]",
     #"OH[s]",
     #"O[s]",
@@ -193,11 +206,11 @@ for element_bulk in element_bulk_list:
 # -----------------------------------------------------------------------------
 
 from ase.db import connect
-from ase import Atoms
 from arkimede.workflow.utilities import (
     get_idpp_interpolated_images,
     get_atoms_TS_from_images_neb,
-    get_new_IS_and_FS,
+    get_new_IS_and_FS_from_images,
+    get_new_IS_and_FS_from_atoms_TS,
 )
 from arkimede.workflow.calculations import (
     run_relax_calculation,
@@ -206,57 +219,19 @@ from arkimede.workflow.calculations import (
     run_climbbonds_calculation,
     run_vibrations_calculation,
 )
+from arkimede.workflow.utilities import (
+    read_atoms_from_db,
+    write_atoms_to_db,
+    update_clean_slab_positions,
+    print_results_calculation,
+    get_images_neb_from_atoms_TS,
+    get_name_TS,
+    check_same_connectivity,
+)
 
 db_ase = connect(name=db_ase_name, append=db_ase_append)
 
-def write_atoms_to_db(atoms, db_ase):
-    """Write atoms to ase database."""
-    name = atoms.info["name"]
-    calculation = atoms.info["calculation"]
-    if db_ase.count(name=name, calculation=calculation) == 0:
-        db_ase.write(
-            atoms=Atoms(atoms),
-            name=name,
-            calculation=calculation,
-            data=atoms.info,
-        )
-    elif db_ase.count(name=name, calculation=calculation) == 1:
-        row_id = db_ase.get(name=name, calculation=calculation).id
-        db_ase.update(
-            id=row_id,
-            atoms=Atoms(atoms),
-            calculation=calculation,
-            data=atoms.info,
-        )
-
-def read_atoms_from_db(atoms, db_ase):
-    """Read atoms from ase database."""
-    name = atoms.info["name"]
-    calculation = atoms.info["calculation"]
-    if db_ase.count(name=name, calculation=calculation) == 1:
-        atoms_row = db_ase.get(name=name, calculation=calculation)
-        info = atoms_row.data.copy()
-        info.update(atoms_row.key_value_pairs)
-        atoms.info.update(info)
-        atoms.set_positions(atoms_row.positions)
-        return atoms
-    else:
-        return None
-
-def update_clean_slab_positions(atoms, db_ase):
-    """Update positions of relaxed clean slab."""
-    if "atoms_clean" in atoms.info:
-        if db_ase.count(name = atoms.info["atoms_clean"]) == 1:
-            atoms_row = db_ase.get(name = atoms.info["atoms_clean"])
-            atoms.set_positions(
-                np.vstack((atoms_row.positions, atoms[len(atoms_clean):].positions))
-            )
-    return atoms
-
-def print_results_calculations(atoms):
-    print(atoms.info["name"], atoms.info["calculation"], atoms.info["converged"])
-
-"""Relax clean slabs."""
+# Relax clean slabs.
 for atoms in atoms_clean_tot:
     atoms.info["calculation"] = "relax"
     if read_atoms_from_db(atoms=atoms, db_ase=db_ase) is None:
@@ -268,9 +243,9 @@ for atoms in atoms_clean_tot:
             name=None,
         )
         write_atoms_to_db(atoms=atoms, db_ase=db_ase)
-    print_results_calculations(atoms=atoms)
+    print_results_calculation(atoms=atoms)
 
-"""Relax slabs with adsorbates."""
+# Relax slabs with adsorbates.
 for atoms in atoms_ads_tot:
     atoms.info["calculation"] = "relax"
     if read_atoms_from_db(atoms=atoms, db_ase=db_ase) is None:
@@ -283,22 +258,24 @@ for atoms in atoms_ads_tot:
             name=None,
         )
         write_atoms_to_db(atoms=atoms, db_ase=db_ase)
-    print_results_calculations(atoms=atoms)
+    print_results_calculation(atoms=atoms)
 
-"""Calculate transition states of the reactions."""
-for atoms_IS_FS in atoms_neb_tot:
+# Calculate transition states of the reactions.
+for idx, atoms_IS_FS in enumerate(atoms_neb_tot):
     
     # Initialize the atoms TS as copy of the initial state and update name.
-    atoms_TS = atoms_IS_FS[0].copy()
-    atoms_TS.info["name"] = "_".join([
-        atoms_IS_FS[0].info["clean_name"],
-        "→".join([atoms_IS_FS[0].info["ads_name"], atoms_IS_FS[1].info["ads_name"]]),
-        "→".join([atoms_IS_FS[0].info["site_id"], atoms_IS_FS[1].info["site_id"]]),
-    ])
-    bonds_TS = atoms_IS_FS[1].info["bonds_TS"]
+    atoms_IS, atoms_FS = atoms_IS_FS
+    atoms_TS = atoms_IS.copy()
+    atoms_TS.info["name"] = get_name_TS(atoms_IS, atoms_FS)
+    bonds_TS = atoms_FS.info["bonds_TS"]
+
+    # Prepare a directory to store the trajectories.
+    if save_trajectories is True:
+        directory = f"reactions/idx_{idx:02d}"
+        os.makedirs(directory, exist_ok=True)
 
     # Relax initial and final states.
-    for atoms in atoms_IS_FS:
+    for atoms in (atoms_IS, atoms_FS):
         atoms.info["calculation"] = "relax"
         if read_atoms_from_db(atoms=atoms, db_ase=db_ase) is None:
             update_clean_slab_positions(atoms=atoms, db_ase=db_ase)
@@ -310,72 +287,96 @@ for atoms_IS_FS in atoms_neb_tot:
                 name=None,
             )
             write_atoms_to_db(atoms=atoms, db_ase=db_ase)
-        print_results_calculations(atoms=atoms)
+        print_results_calculation(atoms=atoms)
     
-    # Run the neb calculation.
+    # Run the NEB calculation.
     atoms_TS.info["calculation"] = "neb"
     if read_atoms_from_db(atoms=atoms_TS, db_ase=db_ase) is None:
         images = get_idpp_interpolated_images(
-            atoms_IS = atoms_IS_FS[0],
-            atoms_FS = atoms_IS_FS[1],
-            name = None,
+            atoms_IS=atoms_IS,
+            atoms_FS=atoms_FS,
+            n_images=10,
+            name=None,
         )
         run_neb_calculation(
-            images = images,
-            calc = calc,
-            steps_max = steps_max_neb,
-            fmax = fmax,
-            name = None,
+            images=images,
+            calc=calc,
+            steps_max=steps_max_neb,
+            fmax=fmax,
+            k_neb=0.10,
+            use_OCPdyNEB=False,
+            use_NEBOptimizer=True,
+            print_energies=True,
+            name=None,
         )
         get_atoms_TS_from_images_neb(images=images, atoms_TS=atoms_TS)
-        write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
-    print_results_calculations(atoms=atoms_TS)
         
-    if atoms_TS.info["converged"] is False:
-        if search_TS == "dimer":
-            atoms_TS.info["calculation"] = "dimer"
-            if read_atoms_from_db(atoms=atoms_TS, db_ase=db_ase) is None:
-                run_dimer_calculation(
-                    atoms = atoms_TS,
-                    calc = calc,
-                    bonds_TS = bonds_TS,
-                    vector = atoms_TS.info["vector"].copy(),
-                    fmax = fmax,
-                    name = None,
+        # Check if relaxing the TS gives the initial IS and FS.
+        if atoms_TS.info["converged"] is False:
+            atoms_IS_new, atoms_FS_new = get_new_IS_and_FS_from_images(images=images)
+            for atoms in (atoms_IS_new, atoms_FS_new):
+                run_relax_calculation(
+                    atoms=atoms,
+                    calc=calc,
+                    fmax=fmax,
+                    steps_max=steps_max_relax,
+                    name=None,
                 )
-                write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
-            print_results_calculations(atoms=atoms_TS)
-        elif search_TS == "climbbonds":
-            atoms_TS.info["calculation"] = "climbbonds"
-            if read_atoms_from_db(atoms=atoms_TS, db_ase=db_ase) is None:
-                run_climbbonds_calculation(
-                    atoms = atoms_TS,
-                    calc = calc,
-                    bonds_TS = bonds_TS,
-                    name = None,
-                )
-                write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
-            print_results_calculations(atoms=atoms_TS)
-    
-    #freq = run_vibrations_calculation(atoms=atoms_TS, calc=calc)
-    
-    #atoms_IS_FS_new = get_new_IS_and_FS(
-    #    calc = calc,
-    #    atoms_TS = atoms_TS,
-    #    bonds_TS = bonds_TS,
-    #)
-    #
-    #for atoms in atoms_IS_FS_new:
-    #    if read_atoms_from_db(atoms=atoms, db_ase=db_ase) is None:
-    #        run_relax_calculation(
-    #            atoms=atoms,
-    #            calc=calc,
-    #            fmax=fmax,
-    #            steps_max=steps_max_relax,
-    #            name=None,
-    #        )
-    #        #write_atoms_to_db(atoms, db_ase, calculation="relax")
+            check_IS = check_same_connectivity(atoms_IS, atoms_IS_new)
+            check_FS = check_same_connectivity(atoms_FS, atoms_FS_new)
+            if bool(check_IS*check_FS) is False:
+                atoms_TS.info["modified"] = True
+        write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
+    print_results_calculation(atoms=atoms_TS)
 
+    # If NEB is not converged, do a TS search calculation.
+    if atoms_TS.info["converged"] is False and atoms_TS.info["modified"] is False:
+        
+        atoms_TS.info["calculation"] = search_TS
+        if read_atoms_from_db(atoms=atoms_TS, db_ase=db_ase) is None:
+            # Dimer calculation.
+            if search_TS == "dimer":
+                run_dimer_calculation(
+                    atoms=atoms_TS,
+                    calc=calc,
+                    bonds_TS=bonds_TS,
+                    vector=atoms_TS.info["vector"].copy(),
+                    fmax=fmax,
+                    name=None,
+                )
+            # Climbbonds calculaton.
+            elif search_TS == "climbbonds":
+                run_climbbonds_calculation(
+                    atoms=atoms_TS,
+                    calc=calc,
+                    bonds_TS=bonds_TS,
+                    fmax=fmax,
+                    name=None,
+                )
+        
+            # Check if relaxing the TS gives the initial IS and FS.
+            atoms_IS_new, atoms_FS_new = get_new_IS_and_FS_from_atoms_TS(
+                atoms_TS=atoms_TS,
+                bonds_TS=bonds_TS,
+            )
+            for atoms in (atoms_IS_new, atoms_FS_new):
+                run_relax_calculation(
+                    atoms=atoms,
+                    calc=calc,
+                    fmax=fmax,
+                    steps_max=steps_max_relax,
+                    name=None,
+                )
+            check_IS = check_same_connectivity(atoms_IS, atoms_IS_new)
+            check_FS = check_same_connectivity(atoms_FS, atoms_FS_new)
+            if bool(check_IS*check_FS) is False:
+                atoms_TS.info["modified"] = True
+    
+            write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
+        print_results_calculation(atoms=atoms_TS)
+    
+    freq = run_vibrations_calculation(atoms=atoms_TS, calc=calc, clean=True)
+    
 # -----------------------------------------------------------------------------
 # SHOW ATOMS
 # -----------------------------------------------------------------------------
