@@ -46,8 +46,10 @@ def get_idpp_interpolated_images(
     atoms_IS,
     atoms_FS,
     n_images=10,
-    name=None,
-    fmax_idpp=0.001,
+    name='idpp',
+    fmax=0.005,
+    steps_max=1000,
+    save_trajs=False,
 ):
     """Get idpp interpolated images with strict optimization parameters."""
     
@@ -57,16 +59,16 @@ def get_idpp_interpolated_images(
     neb = NEB(images = images)
     neb.interpolate()
     idpp_interpolate(
-        images = images,
-        traj = f'{name}_idpp_opt.traj' if name else None,
-        log = f'{name}_idpp_opt.log' if name else None, 
-        fmax = fmax_idpp,
-        optimizer = BFGS,
-        mic = False,
-        steps = 10000,
+        images=images,
+        traj=None,
+        log=None, 
+        fmax=fmax,
+        optimizer=BFGS,
+        mic=False,
+        steps=steps_max,
     )
-    if name:
-        traj = Trajectory(filename = f'{name}_idpp.traj', mode = 'w')
+    if save_trajs is True:
+        traj = Trajectory(filename = f'{name}.traj', mode = 'w')
         for image in images:
             traj.write(image)
 
@@ -253,7 +255,7 @@ def get_name_TS(atoms_IS, atoms_FS):
     ads_names = [atoms_IS.info["ads_name"], atoms_FS.info["ads_name"]]
     site_ids = [atoms_IS.info["site_id"], atoms_FS.info["site_id"]]
     name_TS = "_".join(
-        [atoms_IS.info["clean_name"], "→".join(ads_names), "→".join(site_ids)]
+        [atoms_IS.info["surface_name"], "→".join(ads_names), "→".join(site_ids)]
     )
     return name_TS
 

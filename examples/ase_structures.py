@@ -302,85 +302,85 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
     if ads_name is not None:
         gas_name = ads_name.split("[")[0]
 
-    if ads_name in ("O[s]", "C[s]"):
+    if ads_name in ("O*", "C*"):
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = ["brg", "3fh", "4fh"]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "H[s]":
+    elif ads_name == "H*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "CO[s]":
+    elif ads_name == "CO*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {
-            "C[s]+O[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "C*+O*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CH[s]":
+    elif ads_name == "CH*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {
-            "C[s]+H[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "C*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CH2[s]":
+    elif ads_name == "CH2*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {
-            "CH[s]+H[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "CH*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CH3[s]":
+    elif ads_name == "CH3*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {
-            "CH2[s]+H[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "CH2*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "OH[s]":
+    elif ads_name == "OH*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {
-            "O[s]+H[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "O*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "H2O[s]":
+    elif ads_name == "H2O*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = ["top", "brg"]
         symmetric_ads = False
         dissoc_dict = {
-            "OH[s]+H[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "OH*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CO2[ss]":
+    elif ads_name == "CO2**":
         gas_name = "CO2"
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {
-            "CO[s]+O[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "CO*+O*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CO2[s]":
+    elif ads_name == "CO2*":
         gas_name = "CO2"
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
@@ -389,60 +389,60 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
         sites_names = ["brg"]
         symmetric_ads = False
         dissoc_dict = {
-            "CO[s]+O[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "CO*+O*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "COH[s]":
+    elif ads_name == "COH*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {
-            "CO[s]+H[s]": {"bond_break": [1, 2], "bonds_surf": [0, 2]},
+            "CO*+H*": {"bond_break": [1, 2], "bonds_surf": [0, 2]},
         }
 
-    elif ads_name == "HCO[s]":
+    elif ads_name == "HCO*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = ["top", "brg"]
         symmetric_ads = False
         dissoc_dict = {
-            "CH[s]+O[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
-            "CO[s]+H[s]": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
+            "CH*+O*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "CO*+H*": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
         }
 
-    elif ads_name == "HCO[ss]":
+    elif ads_name == "HCO**":
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {
-            "CH[s]+O[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
-            "CO[s]+H[s]": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
+            "CH*+O*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "CO*+H*": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
         }
 
-    elif ads_name == "cCOOH[s]":
+    elif ads_name == "cCOOH*":
         gas_name = "COOH"
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = ["top", "brg"]
         symmetric_ads = False
         dissoc_dict = {
-            "CO[s]+OH[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "CO*+OH*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "cCOOH[ss]":
+    elif ads_name == "cCOOH**":
         gas_name = "COOH"
         bonds_surf = [0, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {
-            "CO[s]+OH[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
-            "COH[s]+O[s]": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
+            "CO*+OH*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+            "COH*+O*": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
         }
 
-    elif ads_name == "tCOOH[s]":
+    elif ads_name == "tCOOH*":
         gas_name = "COOH"
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
@@ -450,10 +450,10 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
         sites_names = ["top", "brg"]
         symmetric_ads = False
         dissoc_dict = {
-            "CO2[s]+H[s]": {"bond_break": [1, 3], "bonds_surf": [0, 3]},
+            "CO2*+H*": {"bond_break": [1, 3], "bonds_surf": [0, 3]},
         }
 
-    elif ads_name == "tCOOH[ss]":
+    elif ads_name == "tCOOH**":
         gas_name = "COOH"
         bonds_surf = [0, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
@@ -461,83 +461,83 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {
-            "CO2[s]+H[s]": {"bond_break": [1, 3], "bonds_surf": [0, 3]},
-            "CO2[ss]+H[s]": {"bond_break": [1, 3], "bonds_surf": [0, 2, 3]},
+            "CO2*+H*": {"bond_break": [1, 3], "bonds_surf": [0, 3]},
+            "CO2**+H*": {"bond_break": [1, 3], "bonds_surf": [0, 2, 3]},
         }
 
-    elif ads_name == "HCOO[ss]":
+    elif ads_name == "HCOO**":
         bonds_surf = [1, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = True
         dissoc_dict = {
-            "HCO[s]+O[s]": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
-            "HCO[ss]+O[s]": {"bond_break": [0, 2], "bonds_surf": [0, 1, 2]},
-            "CO2[ss]+H[s]": {"bond_break": [0, 3], "bonds_surf": [0, 2, 3]},
+            "HCO*+O*": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
+            "HCO**+O*": {"bond_break": [0, 2], "bonds_surf": [0, 1, 2]},
+            "CO2**+H*": {"bond_break": [0, 3], "bonds_surf": [0, 2, 3]},
         }
 
-    elif ads_name == "HCOO[s]":
+    elif ads_name == "HCOO*":
         bonds_surf = [1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {
-            "CO2[s]+H[s]": {"bond_break": [0, 3], "bonds_surf": [0, 3]},
-            "CO2[ss]+H[s]": {"bond_break": [0, 3], "bonds_surf": [0, 2, 3]},
+            "CO2*+H*": {"bond_break": [0, 3], "bonds_surf": [0, 3]},
+            "CO2**+H*": {"bond_break": [0, 3], "bonds_surf": [0, 2, 3]},
         }
 
-    elif ads_name == "H2COO[ss]":
+    elif ads_name == "H2COO**":
         bonds_surf = [1, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = True
         dissoc_dict = {}
 
-    elif ads_name == "H2COOH[ss]":
+    elif ads_name == "H2COOH**":
         bonds_surf = [1, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {
-            "H2CO[ss]+OH[s]": {"bond_break": [0, 1], "bonds_surf": [0, 1, 2]},
+            "H2CO**+OH*": {"bond_break": [0, 1], "bonds_surf": [0, 1, 2]},
         }
 
-    elif ads_name == "H2CO[ss]":
+    elif ads_name == "H2CO**":
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "H3CO[s]":
+    elif ads_name == "H3CO*":
         bonds_surf = [1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "HCOH[ss]":
+    elif ads_name == "HCOH**":
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "H2COH[ss]":
+    elif ads_name == "H2COH**":
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "HCOOH[s]":
+    elif ads_name == "HCOOH*":
         bonds_surf = [1, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "COHOH[s]":
+    elif ads_name == "COHOH*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[2]
         sites_names = ["top", "brg"]
@@ -586,34 +586,34 @@ if __name__ == "__main__":
     ]
 
     ads_name_list = [
-        "H[s]",
-        "O[s]",
-        "C[s]",
-        "CO[s]",
-        "CH[s]",
-        "CH2[s]",
-        "CH3[s]",
-        "OH[s]",
-        "H2O[s]",
-        "CO2[ss]",
-        "CO2[s]",
-        "COH[s]",
-        "HCO[s]",
-        "HCO[ss]",
-        "cCOOH[s]",
-        "cCOOH[ss]",
-        "tCOOH[s]",
-        "tCOOH[ss]",
-        "HCOO[ss]",
-        "HCOO[s]",
-        "H2COO[ss]",
-        "H2COOH[ss]",
-        "H2CO[ss]",
-        "H3CO[s]",
-        "HCOH[ss]",
-        "H2COH[ss]",
-        "HCOOH[s]",
-        "COHOH[s]",
+        "H*",
+        "O*",
+        "C*",
+        "CO*",
+        "CH*",
+        "CH2*",
+        "CH3*",
+        "OH*",
+        "H2O*",
+        "CO2**",
+        "CO2*",
+        "COH*",
+        "HCO*",
+        "HCO**",
+        "cCOOH*",
+        "cCOOH**",
+        "tCOOH*",
+        "tCOOH**",
+        "HCOO**",
+        "HCOO*",
+        "H2COO**",
+        "H2COOH**",
+        "H2CO**",
+        "H3CO*",
+        "HCOH**",
+        "H2COH**",
+        "HCOOH*",
+        "COHOH*",
     ]
 
     atoms_list = []

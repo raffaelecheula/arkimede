@@ -2,7 +2,9 @@
 # IMPORTS
 # -----------------------------------------------------------------------------
 
+import os
 import numpy as np
+from ase.io import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
 from .utilities import get_atoms_not_fixed
 
@@ -15,19 +17,38 @@ def run_relax_calculation(
     calc,
     fmax=0.01,
     steps_max=300,
-    name=None,
+    logfile='-',
+    name='relax',
+    directory='.',
+    save_trajs=False,
+    write_images=False,
 ):
     """Run a relax calculation."""
     from ase.optimize import BFGS
 
+    # Create directory to store the results.
+    if save_trajs is True or write_images is True:
+        os.makedirs(directory, exist_ok=True)
+
+    # Name of the trajectory file.
+    if save_trajs is True:
+        trajectory = os.path.join(directory, f'{name}.traj')
+    else:
+        trajectory = None
+
+    # Setup the BFGS solver.
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
     opt = BFGS(
         atoms=atoms_copy,
-        trajectory=f'{name}_relax.traj' if name else None,
+        logfile=logfile,
+        trajectory=trajectory,
     )
+    
+    # Run the calculation.
     converged = opt.run(fmax=fmax, steps=steps_max)
     
+    # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
     atoms.calc = SinglePointCalculator(
         atoms=atoms,
@@ -36,6 +57,11 @@ def run_relax_calculation(
     )
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
+
+    # Write image.
+    if write_images is True:
+        filename = os.path.join(directory, f"{name}.png")
+        atoms.write(filename, radii=0.9, scale=200)
 
 # -----------------------------------------------------------------------------
 # RUN NEB CALCULATION
@@ -47,7 +73,11 @@ def run_neb_calculation(
     fmax=0.01,
     steps_max=300,
     k_neb=0.10,
-    name=None,
+    name='neb',
+    directory='.',
+    save_trajs=False,
+    write_images=False,
+    logfile='-',
     use_OCPdyNEB=False,
     use_NEBOptimizer=False,
     activate_climb=True,
@@ -55,6 +85,18 @@ def run_neb_calculation(
     ftres_climb=0.10,
 ):
     """Run a NEB calculation."""
+    
+    # Create directory to store the results.
+    if save_trajs is True or write_images is True:
+        os.makedirs(directory, exist_ok=True)
+    
+    # Name of the trajectory file.
+    if save_trajs is True:
+        trajectory = os.path.join(directory, f'{name}.traj')
+    else:
+        trajectory = None
+    
+    # Choose NEB method.
     if use_OCPdyNEB:
         from ocpneb.core import OCPdyNEB
         neb = OCPdyNEB(
@@ -87,12 +129,13 @@ def run_neb_calculation(
                 forces = images[ii].calc.results["forces"],
             )
     
+    # Choose optimizer.
     if use_NEBOptimizer:
         from ase.neb import NEBOptimizer
-        opt = NEBOptimizer(neb, logfile = None)
+        opt = NEBOptimizer(neb, logfile=logfile)
     else:
         from ase.optimize import BFGS
-        opt = BFGS(neb, logfile = None)
+        opt = BFGS(neb, logfile=logfile)
     
     def activate_climb_obs(neb = neb, ftres = ftres_climb):
         if neb.get_residual() < ftres:
@@ -111,24 +154,35 @@ def run_neb_calculation(
                 print(f'{energy-neb.energies[0]:+9.4f}', end = ' ')
             print('eV')
 
+    # Attach observers.
     if activate_climb:
         opt.attach(activate_climb_obs, interval = 1)
     if print_energies:
         opt.attach(print_energies_obs, interval = 1)
 
-    # The while is to keep NEBOptimizer going when it fails randomly.
-    while opt.nsteps < steps_max:
-        converged = opt.run(fmax = fmax, steps = steps_max-opt.nsteps)
+    # Run the calculation. The while is to keep NEBOptimizer going when 
+    # it fails randomly.
+    converged = False
+    while opt.nsteps < steps_max and not converged:
+        converged = opt.run(fmax=fmax, steps=steps_max-opt.nsteps)
     
-    if name and converged:
-        from ase.io import Trajectory
-        traj = Trajectory(filename = f'{name}_neb.traj', mode = 'w')
+    # Write trajectory.
+    if save_trajs is True:
+        traj = Trajectory(filename = trajectory, mode = 'w')
         for atoms in images:
             traj.write(atoms)
     
+    # Update images with the results.
     for atoms in images:
         atoms.info["modified"] = False
         atoms.info["converged"] = bool(converged)
+
+    # Write images.
+    if write_images is True:
+        index_TS = np.argmax([atoms.get_potential_energy() for atoms in images])
+        atoms = images[index_TS]
+        filename = os.path.join(directory, f"{name}.png")
+        atoms.write(filename, radii=0.9, scale=200)
 
 # -----------------------------------------------------------------------------
 # RUN DIMER CALCULATION
@@ -139,13 +193,28 @@ def run_dimer_calculation(
     vector,
     calc,
     bonds_TS,
-    name=None,
+    name='dimer',
+    directory='.',
+    save_trajs=False,
+    write_images=False,
+    logfile='-',
     fmax=0.01,
+    steps_max=500,
     reset_eigenmode=True,
     sign_bond_dict={'break': +1, 'form': -1},
 ):
     """Run a dimer calculation."""
     from ase.dimer import DimerControl, MinModeAtoms, MinModeTranslate
+
+    # Create directory to store the results.
+    if save_trajs is True or write_images is True:
+        os.makedirs(directory, exist_ok=True)
+
+    # Name of the trajectory file.
+    if save_trajs is True:
+        trajectory = os.path.join(directory, f'{name}.traj')
+    else:
+        trajectory = None
 
     atoms.calc = calc
     mask = get_atoms_not_fixed(atoms, return_mask=True)
@@ -175,8 +244,8 @@ def run_dimer_calculation(
 
     opt = MinModeTranslate(
         atoms = atoms_dimer,
-        trajectory = f'{name}_dimer.traj' if name else None,
-        logfile = '-',
+        trajectory = trajectory,
+        logfile = logfile,
     )
     
     def reset_eigenmode_obs(opt = opt):
@@ -193,10 +262,14 @@ def run_dimer_calculation(
         eigenmode /= np.linalg.norm(eigenmode)
         opt.eigenmodes = [eigenmode/np.linalg.norm(eigenmode)]
 
+    # Attach observer.
     if bonds_TS and reset_eigenmode:
         opt.attach(reset_eigenmode_obs, interval = 1)
-    converged = opt.run(fmax = fmax)
     
+    # Run the calculation.
+    converged = opt.run(fmax=fmax, steps=steps_max)
+    
+    # Update the input atoms with the results.
     atoms.set_positions(atoms_dimer.positions)
     atoms.calc = SinglePointCalculator(
         atoms = atoms,
@@ -207,6 +280,11 @@ def run_dimer_calculation(
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
+    # Write image.
+    if write_images is True:
+        filename = os.path.join(directory, f"{name}.png")
+        atoms.write(filename, radii=0.9, scale=200)
+
 # -----------------------------------------------------------------------------
 # RUN CLIMBBONDS CALCULATION
 # -----------------------------------------------------------------------------
@@ -215,53 +293,84 @@ def run_climbbonds_calculation(
     atoms,
     bonds_TS,
     calc,
-    name=None,
+    name='climbbonds',
+    directory='.',
+    save_trajs=False,
+    write_images=False,
+    logfile='-',
     fmax=0.01,
+    steps_max=500,
 ):
     """Run a climbbonds calculation."""
     from .climbbonds import ClimbBondLengths
     from ase.optimize.ode import ODE12r
     
+    # Create directory to store the results.
+    if save_trajs is True or write_images is True:
+        os.makedirs(directory, exist_ok=True)
+    
+    # Name of the trajectory file.
+    if save_trajs is True:
+        trajectory = os.path.join(directory, f'{name}.traj')
+    else:
+        trajectory = None
+    
+    # Create a copy of the atoms object to not mess with constraints.
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
     atoms_copy.set_constraint(
         atoms_copy.constraints+[ClimbBondLengths(bonds = bonds_TS)]
     )
 
+    # We use an ODE solver to improve convergence.
     opt = ODE12r(
-        atoms = atoms_copy,
-        trajectory = f'{name}_climbbonds.traj' if name else None,
+        atoms=atoms_copy,
+        logfile=logfile,
+        trajectory=trajectory,
     )
-    converged = opt.run(fmax = fmax)
     
+    # Run the calculation.
+    opt.run(fmax=fmax, steps=steps_max)
+    converged = opt.converged()
+    
+    # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
     atoms.calc = SinglePointCalculator(
-        atoms = atoms,
-        energy = atoms_copy.calc.results['energy'],
-        forces = atoms_copy.calc.results['forces'],
+        atoms=atoms,
+        energy=atoms_copy.calc.results['energy'],
+        forces=atoms_copy.calc.results['forces'],
     )
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
+
+    # Write image.
+    if write_images is True:
+        filename = os.path.join(directory, f"{name}.png")
+        atoms.write(filename, radii=0.9, scale=200)
 
 # -----------------------------------------------------------------------------
 # RUN VIBRATIONS CALCULATION
 # -----------------------------------------------------------------------------
 
-def run_vibrations_calculation(atoms, calc, clean=True):
+def run_vibrations_calculation(atoms, calc):
     """Run a vibrations calculation."""
     from ase.vibrations import Vibrations
     
+    # Initialize teh vibrations calculation.
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
-    
     indices = get_atoms_not_fixed(atoms)
     vib = Vibrations(atoms=atoms_copy, indices=indices, delta=0.01, nfree=2)
+    
+    # Run the calculation and get normal frequencies.
     vib.run()
+    frequencies = vib.get_frequencies()
+    vib.clean()
+    os.rmdir('vib')
 
-    if clean is True:
-        vib.clean()
+    atoms.info["frequencies"] = frequencies
 
-    return vib.get_frequencies()
+    return frequencies
 
 # -----------------------------------------------------------------------------
 # END

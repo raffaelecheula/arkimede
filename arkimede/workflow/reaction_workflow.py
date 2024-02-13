@@ -14,24 +14,21 @@ class MechanismCalculator:
     def __init__(
         self,
         atoms_clean,
-        calc,
         get_atoms_gas_fun,
         range_edges,
         displ_max_reaction,
         range_coadsorption,
         auto_construct=True,
-        topology_sym=False,
     ):
         self.atoms_clean = atoms_clean
-        self.calc = calc
         self.get_atoms_gas_fun = get_atoms_gas_fun # This could be a dictionary
         self.range_edges = range_edges
         self.displ_max_reaction = displ_max_reaction
         self.range_coadsorption = range_coadsorption
         self.auto_construct = auto_construct
-        self.topology_sym = topology_sym
     
         self.lattice_const = atoms_clean.info["lattice_const"]
+        self.surface_name = self.atoms_clean.info["name"]
 
         # Setup the builder of adsorption data.
         self.builder = MechanismBuilder(
@@ -55,15 +52,14 @@ class MechanismCalculator:
                 range_edges=self.range_edges,
                 auto_construct=self.auto_construct,
                 symmetric_ads=adsorbate.info["symmetric_ads"],
-                topology_sym=self.topology_sym,
             )
 
             for atoms_ads in atoms_ads_list:
-                atoms_ads.info["clean_name"] = self.atoms_clean.info["name"]
+                atoms_ads.info["surface_name"] = self.surface_name
                 atoms_ads.info["ads_name"] = adsorbate.info["ads_name"]
                 atoms_ads.info["name"] = "_".join(
                     [
-                        atoms_ads.info["clean_name"],
+                        atoms_ads.info["surface_name"],
                         atoms_ads.info["ads_name"],
                         atoms_ads.info["site_id"]
                     ]
@@ -104,15 +100,14 @@ class MechanismCalculator:
                     range_edges=self.range_edges,
                     auto_construct=self.auto_construct,
                     symmetric_ads=reactant.info["symmetric_ads"],
-                    topology_sym=self.topology_sym,
                 )
                 
                 for slab_reactants in slab_reactants_list:
-                    slab_reactants.info["clean_name"] = self.atoms_clean.info["name"]
+                    slab_reactants.info["surface_name"] = self.surface_name
                     slab_reactants.info["ads_name"] = reactants_str
                     slab_reactants.info["name"] = "_".join(
                         [
-                            slab_reactants.info["clean_name"],
+                            slab_reactants.info["surface_name"],
                             slab_reactants.info["ads_name"],
                             slab_reactants.info["site_id"]
                         ]
@@ -135,11 +130,11 @@ class MechanismCalculator:
                     )
 
                     for slab_products in slab_products_list:
-                        slab_products.info["clean_name"] = self.atoms_clean.info["name"]
+                        slab_products.info["surface_name"] = self.surface_name
                         slab_products.info["ads_name"] = products_str
                         slab_products.info["name"] = "_".join(
                             [
-                                slab_products.info["clean_name"],
+                                slab_products.info["surface_name"],
                                 slab_products.info["ads_name"],
                                 slab_products.info["site_id"]
                             ]

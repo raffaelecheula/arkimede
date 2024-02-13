@@ -113,7 +113,6 @@ class AdsorptionSites:
         )
 
         self.symmetric_sites = None
-        self.topology_sym = None
 
     def get_coordination_numbers(self):
         """Return the coordination numbers of surface atoms."""
@@ -329,45 +328,30 @@ class AdsorptionSites:
 
         return periodic_sites
 
-    def get_symmetric_sites(self, topology_sym=False):
+    def get_symmetric_sites(self):
 
         """Determine the symmetrically unique adsorption sites
         from a list of fractional coordinates.
         """
 
-        if topology_sym is False:
-            sym = Symmetry(self.slab, tol=self.tol)
-
-            rotations, translations = sym.get_symmetry_operations(affine=False)
-            rotations = np.swapaxes(rotations, 1, 2)
-
-            affine = np.append(rotations, translations[:, None], axis=1)
-            points = self.frac_coords
-            index = self.get_periodic_sites(screen=False)
-
-            affine_points = np.insert(points, 3, 1, axis=1)
-            operations = np.dot(affine_points, affine)
-            symmetric_sites = np.arange(points.shape[0])
-
-            for i, j in enumerate(symmetric_sites):
-                if i != j:
-                    continue
-                d = operations[i, :, None] - points
-                d -= np.round(d)
-                dind = np.where((np.abs(d) < self.tol).all(axis=2))[-1]
-                symmetric_sites[np.unique(dind)] = index[i]
-
-        else:
-            symmetric_sites = self.sites.copy()
-            site_tags = [self.get_site_tag(index=index) for index in symmetric_sites]
-            tags_unique, indices = np.unique(site_tags, return_index=True)
-            tags_dict = dict(zip(tags_unique, indices))
-            for i, t in enumerate(site_tags):
-                index_sym = tags_dict[t]
-                symmetric_sites[i] = symmetric_sites[index_sym]
+        sym = Symmetry(self.slab, tol=self.tol)
+        rotations, translations = sym.get_symmetry_operations(affine=False)
+        rotations = np.swapaxes(rotations, 1, 2)
+        affine = np.append(rotations, translations[:, None], axis=1)
+        points = self.frac_coords
+        index = self.get_periodic_sites(screen=False)
+        affine_points = np.insert(points, 3, 1, axis=1)
+        operations = np.dot(affine_points, affine)
+        symmetric_sites = np.arange(points.shape[0])
+        for i, j in enumerate(symmetric_sites):
+            if i != j:
+                continue
+            d = operations[i, :, None] - points
+            d -= np.round(d)
+            dind = np.where((np.abs(d) < self.tol).all(axis=2))[-1]
+            symmetric_sites[np.unique(dind)] = index[i]
 
         self.symmetric_sites = symmetric_sites
-        self.topology_sym = topology_sym
 
         return symmetric_sites
 
@@ -377,7 +361,6 @@ class AdsorptionSites:
         screen=True,
         sites_names=None,
         site_contains=None,
-        topology_sym=False,
         sites_avail=None,
     ):
         """Determine the symmetrically unique adsorption sites
@@ -391,8 +374,6 @@ class AdsorptionSites:
             Return only sites inside the unit cell.
         sites_names : str
             Return only sites with given name.
-        topology_sym : bool
-            Calculate symmetry based on sites topology.
 
         Returns
         -------
@@ -400,8 +381,8 @@ class AdsorptionSites:
             Array containing the indices of sites unique by symmetry.
         """
 
-        if self.symmetric_sites is None or topology_sym != self.topology_sym:
-            self.get_symmetric_sites(topology_sym=topology_sym)
+        if self.symmetric_sites is None:
+            self.get_symmetric_sites()
 
         if sites_avail is None:
             sites = self.symmetric_sites.copy()
@@ -474,7 +455,6 @@ class AdsorptionSites:
         sites_names=None,
         site_contains=None,
         symmetric_ads=False,
-        topology_sym=False,
         sites_one=None,
         sites_two=None,
         screen=True,
@@ -503,15 +483,13 @@ class AdsorptionSites:
 
         if sites_one is None:
             if unique is True:
-                sites_one = self.get_adsorption_sites(topology_sym=topology_sym)
+                sites_one = self.get_adsorption_sites()
             elif screen is True:
                 sites_one = self.get_periodic_sites()
             else:
                 sites_one = self.sites
 
-        sites_all = self.get_adsorption_sites(
-            unique=False, screen=False, topology_sym=topology_sym
-        )
+        sites_all = self.get_adsorption_sites(unique=False, screen=False)
 
         coords = self.coordinates[:, :2]
         r1top = self.r1_topology
@@ -786,7 +764,6 @@ class MechanismBuilder(AdsorptionSites):
         range_edges=None,
         sites_names=None,
         symmetric_ads=False,
-        topology_sym=False,
         site_contains=None,
         slab=None,
         screen=True,
@@ -814,8 +791,6 @@ class MechanismBuilder(AdsorptionSites):
             Define the site names allowed.
         symmetric_ads : bool
             Reduce the adsorption configurations if the adsorbate is symmetric.
-        topology_sym : bool
-            Calculate symmetry based on sites topology.
 
         Returns
         -------
@@ -840,7 +815,6 @@ class MechanismBuilder(AdsorptionSites):
                 sites = self.get_adsorption_sites(
                     sites_names=sites_names,
                     site_contains=site_contains,
-                    topology_sym=topology_sym,
                     screen=screen,
                     unique=unique,
                     sites_avail=sites_avail,
@@ -871,7 +845,6 @@ class MechanismBuilder(AdsorptionSites):
                 sites_names=sites_names,
                 site_contains=site_contains,
                 symmetric_ads=symmetric_ads,
-                topology_sym=topology_sym,
                 screen=screen,
                 unique=unique,
                 sites_one=sites_avail,
@@ -950,16 +923,12 @@ class MechanismBuilder(AdsorptionSites):
 
         # Store site numbers
         if "site_numbers" in slab.info:
+            slab.info["site_numbers"] = slab.info["site_numbers"].copy()
             slab.info["site_numbers"] += [[site]]
         else:
             slab.info["site_numbers"] = [[site]]
 
-        # Get adsorption site tag
-        tags = [self.get_site_tag(int(s)) for s in sites]
-        tag_num = len([tag for tag in tags[:site_index] if tag == tags[site_index]])
-        slab.info["site_tag"] = tags[site_index]
-        slab.info["tag_num"] = tag_num
-
+        # Get adsorption site id
         slab.info["site_id"] = self.get_site_id(site)
 
         return slab
@@ -1053,15 +1022,12 @@ class MechanismBuilder(AdsorptionSites):
 
         # Store site numbers
         if "site_numbers" in slab.info:
+            slab.info["site_numbers"] = slab.info["site_numbers"].copy()
             slab.info["site_numbers"] += [edge.tolist()]
         else:
             slab.info["site_numbers"] = [edge.tolist()]
 
-        # Get adsorption site tag
-        tags = [self.get_site_tag(ee) for ee in edges]
-        tag_num = len([tag for tag in tags[:edge_index] if tag == tags[edge_index]])
-        slab.info["site_tag"] = tags[edge_index]
-        slab.info["tag_num"] = tag_num
+        # Get adsorption site id
         slab.info["site_id"] = self.get_site_id(edge)
 
         return slab
@@ -1078,7 +1044,6 @@ class MechanismBuilder(AdsorptionSites):
         sites_names=None,
         site_contains=None,
         intersection=True,
-        topology_sym=False,
     ):
         """Add an adsorbate to a slab at a desired distance ranges from the
         positions of centres.
@@ -1113,7 +1078,6 @@ class MechanismBuilder(AdsorptionSites):
             range_edges=range_edges,
             sites_names=sites_names,
             symmetric_ads=False,
-            topology_sym=False,
             screen=False,
             unique=False,
             site_contains=site_contains,
@@ -1268,9 +1232,6 @@ class MechanismBuilder(AdsorptionSites):
 
         for slab in slabs_products:
             slab.info["bonds_TS"] = [[bb+n_atoms_clean for bb in bond_break]+['break']]
-            slab.info["site_tag"] = "_".join(
-                [self.get_site_tag(index=index) for index in slab.info["site_numbers"]]
-            )
             slab.info["site_id"] = "+".join(
                 [self.get_site_id(index=index) for index in slab.info["site_numbers"]]
             )
@@ -1343,28 +1304,6 @@ class MechanismBuilder(AdsorptionSites):
             distance += np.sum(norm)
 
         return distance
-
-    def get_site_tag(self, index):
-        """Return the tag of an active site."""
-
-        if isinstance(index, (list, np.ndarray)):
-            site_tag = "-".join([self.get_site_tag(int(i)) for i in index])
-        else:
-            site_tag = (
-                self.sites_names[index]
-                + "["
-                + ",".join(
-                    sorted(
-                        [
-                            f"{self.symbols[r1top]}.{self.ncoord_surf[r1top]}"
-                            for r1top in self.r1_topology[index]
-                        ]
-                    )
-                )
-                + "]"
-            )
-
-        return site_tag
 
     def get_site_id(self, index):
         """Return the tag of an active site."""
