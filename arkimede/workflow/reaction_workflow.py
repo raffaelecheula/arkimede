@@ -37,13 +37,13 @@ class MechanismCalculator:
             cutoff=self.lattice_const,
         )
 
-    def get_adsorbates(self, ads_name_list):
+    def get_adsorbates(self, adsorbate_list):
         
         # Get the atoms structures of the surface slab with adsorbates.
         atoms_ads_tot = []
-        for ads_name in ads_name_list:
+        for species in adsorbate_list:
 
-            adsorbate = self.get_atoms_gas_fun(ads_name=ads_name)
+            adsorbate = self.get_atoms_gas_fun(species=species)
 
             # Get the slabs with adsorbates.
             atoms_ads_list = self.builder.add_adsorbate(
@@ -56,11 +56,11 @@ class MechanismCalculator:
 
             for atoms_ads in atoms_ads_list:
                 atoms_ads.info["surface_name"] = self.surface_name
-                atoms_ads.info["ads_name"] = adsorbate.info["ads_name"]
+                atoms_ads.info["species"] = adsorbate.info["species"]
                 atoms_ads.info["name"] = "_".join(
                     [
                         atoms_ads.info["surface_name"],
-                        atoms_ads.info["ads_name"],
+                        atoms_ads.info["species"],
                         atoms_ads.info["site_id"]
                     ]
                 )
@@ -69,19 +69,19 @@ class MechanismCalculator:
 
         return atoms_ads_tot
 
-    def get_neb_images(self, reactions_list):
+    def get_neb_images(self, reaction_list):
         
         atoms_neb_tot = []
         # Get the images for reaction calculations.
-        for reaction in reactions_list:
+        for reaction in reaction_list:
         
             reactants_str, products_str = reaction.split("→")
             reactants = [
-                self.get_atoms_gas_fun(ads_name=name)
+                self.get_atoms_gas_fun(species=name)
                 for name in reactants_str.split("+")
             ]
             products = [
-                self.get_atoms_gas_fun(ads_name=name)
+                self.get_atoms_gas_fun(species=name)
                 for name in products_str.split("+")
             ]
             
@@ -104,11 +104,11 @@ class MechanismCalculator:
                 
                 for slab_reactants in slab_reactants_list:
                     slab_reactants.info["surface_name"] = self.surface_name
-                    slab_reactants.info["ads_name"] = reactants_str
+                    slab_reactants.info["species"] = reactants_str
                     slab_reactants.info["name"] = "_".join(
                         [
                             slab_reactants.info["surface_name"],
-                            slab_reactants.info["ads_name"],
+                            slab_reactants.info["species"],
                             slab_reactants.info["site_id"]
                         ]
                     )
@@ -131,11 +131,11 @@ class MechanismCalculator:
 
                     for slab_products in slab_products_list:
                         slab_products.info["surface_name"] = self.surface_name
-                        slab_products.info["ads_name"] = products_str
+                        slab_products.info["species"] = products_str
                         slab_products.info["name"] = "_".join(
                             [
                                 slab_products.info["surface_name"],
-                                slab_products.info["ads_name"],
+                                slab_products.info["species"],
                                 slab_products.info["site_id"]
                             ]
                         )

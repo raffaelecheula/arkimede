@@ -92,6 +92,11 @@ def get_atoms_TS_from_images_neb(images, atoms_TS=None, index_TS=None):
         atoms_TS.set_positions(images[index_TS].positions)
         atoms_TS.info["modified"] = images[index_TS].info["modified"]
         atoms_TS.info["converged"] = images[index_TS].info["converged"]
+        atoms_TS.calc = SinglePointCalculator(
+            atoms=atoms_TS,
+            energy=images[index_TS].get_potential_energy(),
+            forces=images[index_TS].get_forces(),
+        )
     
     atoms_TS.info.update({
         "images_positions": np.vstack([atoms.positions.copy() for atoms in images]),
@@ -183,11 +188,17 @@ def write_atoms_to_db(atoms, db_ase):
     """Write atoms to ase database."""
     name = atoms.info["name"]
     calculation = atoms.info["calculation"]
+    status = get_status_calculation(atoms)
+    species = atoms.info["species"]
+    surf_structure = atoms.info["surf_structure"]
     if db_ase.count(name=name, calculation=calculation) == 0:
         db_ase.write(
             atoms=Atoms(atoms),
             name=name,
             calculation=calculation,
+            status=status,
+            species=species,
+            surf_structure=surf_structure,
             data=atoms.info,
         )
     elif db_ase.count(name=name, calculation=calculation) == 1:
@@ -196,6 +207,9 @@ def write_atoms_to_db(atoms, db_ase):
             id=row_id,
             atoms=Atoms(atoms),
             calculation=calculation,
+            status=status,
+            species=species,
+            surf_structure=surf_structure,
             data=atoms.info,
         )
 
@@ -213,6 +227,11 @@ def read_atoms_from_db(atoms, db_ase):
         info.update(atoms_row.key_value_pairs)
         atoms.info.update(info)
         atoms.set_positions(atoms_row.positions)
+        atoms.calc = SinglePointCalculator(
+            atoms=atoms,
+            energy=atoms_row.energy,
+            forces=atoms_row.forces,
+        )
         return atoms
     else:
         return None
@@ -235,29 +254,44 @@ def update_clean_slab_positions(atoms, db_ase):
 # PRINT RESULTS CALCULATION
 # -----------------------------------------------------------------------------
 
+def get_status_calculation(atoms):
+    """Get the status of the calculation."""
+    if atoms.info["converged"] is True:
+        if atoms.info["modified"] is True:
+            status = "modified"
+        else:
+            status = "finished"
+    else:
+        status = "unfinished"
+    return status
+
+# -----------------------------------------------------------------------------
+# PRINT RESULTS CALCULATION
+# -----------------------------------------------------------------------------
+
 def print_results_calculation(atoms):
     """Print results of the calculation to screen."""
-    finished = "finished" if atoms.info["converged"] else "unfinished"
-    modified = "modified" if atoms.info["modified"] else "unmodified"
+    status = get_status_calculation(atoms)
+    energy = atoms.calc.results["energy"]
     print(
         f'{atoms.info["name"]:100s}',
         f'{atoms.info["calculation"]:15s}',
-        f'{finished:15s}',
-        f'{modified:15s}',
+        f'{status:15s}',
+        f'{energy:10.3f}',
     )
 
 # -----------------------------------------------------------------------------
-# GET NAME TRANSITION STATE
+# UPDATE INFO TS
 # -----------------------------------------------------------------------------
 
-def get_name_TS(atoms_IS, atoms_FS):
+def update_info_TS(atoms_TS, atoms_IS, atoms_FS):
     """Update positions of relaxed clean slab."""
-    ads_names = [atoms_IS.info["ads_name"], atoms_FS.info["ads_name"]]
-    site_ids = [atoms_IS.info["site_id"], atoms_FS.info["site_id"]]
-    name_TS = "_".join(
-        [atoms_IS.info["surface_name"], "→".join(ads_names), "→".join(site_ids)]
-    )
-    return name_TS
+    species = "→".join([atoms_IS.info["species"], atoms_FS.info["species"]])
+    site_id = "→".join([atoms_IS.info["site_id"], atoms_FS.info["site_id"]])
+    name_TS = "_".join([atoms_IS.info["surface_name"], species, site_id])
+    atoms_TS.info["species"] = species
+    atoms_TS.info["site_id"] = site_id
+    atoms_TS.info["name"] = name_TS
 
 # -----------------------------------------------------------------------------
 # CHECK SAME CONNECTIVITY

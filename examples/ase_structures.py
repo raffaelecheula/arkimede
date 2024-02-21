@@ -250,13 +250,14 @@ def get_atoms_slab(
     surf_structure = atoms_bulk.info["name"][:]
     if number_dopant > 0:
         surf_structure += f"+{element_dopant}{number_dopant}"
+    surf_structure += f"-{miller_index}"
 
-    repetitions_str = "x".join([str(i) for i in repetitions])
-    name = "_".join([surf_structure, miller_index, repetitions_str])
+    name = "_".join([surf_structure, "x".join([str(ii) for ii in repetitions])])
 
     atoms_slab.info = {
         "name": name,
-        "structure_type": "clean",
+        "species": "clean",
+        "surf_structure": surf_structure,
         "n_atoms_clean": len(atoms_slab),
         "element_bulk": element_bulk,
         "miller_index": miller_index,
@@ -265,7 +266,6 @@ def get_atoms_slab(
         "repetitions": repetitions,
         "lattice_const": lattice_const,
         "cutoff_dict": cutoff_dict,
-        "surf_structure": surf_structure,
     }
 
     return atoms_slab
@@ -276,21 +276,8 @@ def get_atoms_slab(
 # -----------------------------------------------------------------------------
 
 
-def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
+def get_atoms_gas(species, vacuum=10.0):
 
-    if gas_name is not None:
-        atoms_gas = molecule(gas_name)[0]
-        bonds_surf = []
-        sites_names = []
-        symmetric_ads = False
-        dissoc_dict = {}
-
-    #top_brg_combinations = [
-    #    {"bonds": ["top", "top"]},
-    #    {"bonds": ["brg", "brg"]},
-    #    {"bonds": ["top", "brg"]},
-    #    {"bonds": ["brg", "top"]},
-    #]
     top_brg_combinations = [
         {'bonds': ['top', 'top'], 'over': 'brg'},
         {'bonds': ['top', 'top'], 'over': '4fh'},
@@ -299,24 +286,30 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
         {'bonds': ['brg', 'top'], 'over': '3fh'},
     ]
 
-    if ads_name is not None:
-        gas_name = ads_name.split("[")[0]
+    gas_name = species.replace("*", "")
 
-    if ads_name in ("O*", "C*"):
+    if "*" not in species:
+        atoms_gas = molecule(gas_name)[0]
+        bonds_surf = []
+        sites_names = []
+        symmetric_ads = False
+        dissoc_dict = {}
+
+    elif species in ("O*", "C*"):
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = ["brg", "3fh", "4fh"]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "H*":
+    elif species == "H*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "CO*":
+    elif species == "CO*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
@@ -325,7 +318,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "C*+O*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CH*":
+    elif species == "CH*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
@@ -334,7 +327,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "C*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CH2*":
+    elif species == "CH2*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
@@ -343,7 +336,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CH*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CH3*":
+    elif species == "CH3*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
@@ -352,7 +345,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CH2*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "OH*":
+    elif species == "OH*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
@@ -361,7 +354,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "O*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "H2O*":
+    elif species == "H2O*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = ["top", "brg"]
@@ -370,7 +363,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "OH*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CO2**":
+    elif species == "CO2**":
         gas_name = "CO2"
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
@@ -380,7 +373,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO*+O*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "CO2*":
+    elif species == "CO2*":
         gas_name = "CO2"
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
@@ -392,7 +385,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO*+O*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "COH*":
+    elif species == "COH*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = None
@@ -401,7 +394,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO*+H*": {"bond_break": [1, 2], "bonds_surf": [0, 2]},
         }
 
-    elif ads_name == "HCO*":
+    elif species == "HCO*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = ["top", "brg"]
@@ -411,7 +404,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO*+H*": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
         }
 
-    elif ads_name == "HCO**":
+    elif species == "HCO**":
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
@@ -421,7 +414,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO*+H*": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
         }
 
-    elif ads_name == "cCOOH*":
+    elif species == "c-COOH*":
         gas_name = "COOH"
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
@@ -431,7 +424,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO*+OH*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
         }
 
-    elif ads_name == "cCOOH**":
+    elif species == "c-COOH**":
         gas_name = "COOH"
         bonds_surf = [0, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
@@ -442,7 +435,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "COH*+O*": {"bond_break": [0, 2], "bonds_surf": [0, 2]},
         }
 
-    elif ads_name == "tCOOH*":
+    elif species == "t-COOH*":
         gas_name = "COOH"
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
@@ -453,7 +446,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO2*+H*": {"bond_break": [1, 3], "bonds_surf": [0, 3]},
         }
 
-    elif ads_name == "tCOOH**":
+    elif species == "t-COOH**":
         gas_name = "COOH"
         bonds_surf = [0, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
@@ -465,7 +458,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO2**+H*": {"bond_break": [1, 3], "bonds_surf": [0, 2, 3]},
         }
 
-    elif ads_name == "HCOO**":
+    elif species == "HCOO**":
         bonds_surf = [1, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
@@ -476,7 +469,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO2**+H*": {"bond_break": [0, 3], "bonds_surf": [0, 2, 3]},
         }
 
-    elif ads_name == "HCOO*":
+    elif species == "HCOO*":
         bonds_surf = [1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
@@ -486,14 +479,14 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "CO2**+H*": {"bond_break": [0, 3], "bonds_surf": [0, 2, 3]},
         }
 
-    elif ads_name == "H2COO**":
+    elif species == "H2COO**":
         bonds_surf = [1, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = True
         dissoc_dict = {}
 
-    elif ads_name == "H2COOH**":
+    elif species == "H2COOH**":
         bonds_surf = [1, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
@@ -502,50 +495,50 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
             "H2CO**+OH*": {"bond_break": [0, 1], "bonds_surf": [0, 1, 2]},
         }
 
-    elif ads_name == "H2CO**":
+    elif species == "H2CO**":
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "H3CO*":
+    elif species == "H3CO*":
         bonds_surf = [1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "HCOH**":
+    elif species == "HCOH**":
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "H2COH**":
+    elif species == "H2COH**":
         bonds_surf = [0, 1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "HCOOH*":
+    elif species == "HCOOH*":
         bonds_surf = [1, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name == "COHOH*":
+    elif species == "COHOH*":
         bonds_surf = [0]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[2]
         sites_names = ["top", "brg"]
         symmetric_ads = False
         dissoc_dict = {}
 
-    elif ads_name is not None:
-        raise ValueError(f"Adsorbate {ads_name} not defined!")
+    elif species is not None:
+        raise ValueError(f"Adsorbate {species} not defined!")
 
     for i in bonds_surf:
         atoms_gas[i].tag = -1
@@ -556,9 +549,7 @@ def get_atoms_gas(gas_name=None, ads_name=None, vacuum=10.0):
     symbols_dict = formula.count()
 
     atoms_gas.info = {
-        "structure_type": "gas",
-        "gas_name": gas_name,
-        "ads_name": ads_name,
+        "species": species,
         "bonds_surf": bonds_surf,
         "sites_names": sites_names,
         "symmetric_ads": symmetric_ads,
@@ -577,7 +568,7 @@ if __name__ == "__main__":
 
     from ase.gui.gui import GUI
 
-    gas_name_list = [
+    gas_species_list = [
         "CH3OH",
         "CO",
         "H2O",
@@ -585,7 +576,7 @@ if __name__ == "__main__":
         "CH4",
     ]
 
-    ads_name_list = [
+    adsorbates_list = [
         "H*",
         "O*",
         "C*",
@@ -600,10 +591,10 @@ if __name__ == "__main__":
         "COH*",
         "HCO*",
         "HCO**",
-        "cCOOH*",
-        "cCOOH**",
-        "tCOOH*",
-        "tCOOH**",
+        "c-COOH*",
+        "c-COOH**",
+        "t-COOH*",
+        "t-COOH**",
         "HCOO**",
         "HCOO*",
         "H2COO**",
@@ -617,10 +608,10 @@ if __name__ == "__main__":
     ]
 
     atoms_list = []
-    for gas_name in gas_name_list:
-        atoms_list.append(get_atoms_gas(gas_name=gas_name))
-    for ads_name in ads_name_list:
-        atoms_list.append(get_atoms_gas(ads_name=ads_name))
+    for species in gas_species_list:
+        atoms_list.append(get_atoms_gas(species=species))
+    for species in adsorbates_list:
+        atoms_list.append(get_atoms_gas(species=species))
 
     gui = GUI(atoms_list)
     gui.run()

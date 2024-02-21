@@ -34,25 +34,26 @@ def main():
     show_gas_init = False
     show_clean_init = False
     show_ads_init = False
-    show_neb_init = True
+    show_neb_init = False
 
     # -----------------------------------------------------------------------------
     # DATASET TASK
     # -----------------------------------------------------------------------------
 
     # Surface structures parameters.
+    bulk_structure = "fcc"
     element_bulk_list = [
         "Rh",
-        #'Cu',
-        #'Pd',
-        #'Co',
-        #'Ni',
-        #'Au',
+        "Cu",
+        "Pd",
+        "Co",
+        "Ni",
+        "Au",
     ]
     miller_index_list = [
         "100",
         #"110",
-        #"111",
+        "111",
         
         #"311c",
         #"110c",
@@ -67,19 +68,19 @@ def main():
     ]
 
     # Adsorbates names.
-    ads_name_list = [
+    adsorbate_list = [
         #"CO2**",
         #"H2O*",
         #"CO*",
         #"H*",
         #"OH*",
         #"O*",
+        "c-COOH**",
+        "t-COOH**",
         
         #"CO2*",
-        #"cCOOH*",
-        #"cCOOH**",
-        #"tCOOH*",
-        #"tCOOH**",
+        #"c-COOH*",
+        #"t-COOH*",
         #"HCOO*",
         #"HCOO**",
         #"HCO*",
@@ -98,14 +99,14 @@ def main():
     ]
 
     # Reactions names.
-    reactions_list = [
-        "CO2**→CO*+O*",
-        "H2O*→OH*+H*",
-        "OH*→O*+H*",
+    reaction_list = [
+        #"CO2**→CO*+O*",
+        #"H2O*→OH*+H*",
+        #"OH*→O*+H*",
+        "t-COOH**→CO2**+H*",
+        "c-COOH**→CO*+OH*",
         
-        #"tCOOH**→CO2**+H*",
-        #"cCOOH**→CO*+OH*",
-        #"cCOOH**→COH*+O*",
+        #"c-COOH**→COH*+O*",
         #"HCOO**→CO2**+H*",
         #"HCOO**→HCO**+O*",
         #"HCO**→CO*+H*",
@@ -138,15 +139,9 @@ def main():
     # Import functions to produce ase atoms structures.
     from ase_structures import get_atoms_slab, get_atoms_gas
 
-    atoms_gas_tot = []
     atoms_clean_tot = []
     atoms_ads_tot = []
     atoms_neb_tot = []
-
-    # Get the atoms structures of gas molecules in vacuum.
-    for ads_name in ads_name_list:
-        atoms_gas = get_atoms_gas(ads_name=ads_name)
-        atoms_gas_tot.append(atoms_gas)
 
     # Get the atoms structures of clean surfaces and surfaces with adsorbates.
     for element_bulk in element_bulk_list:
@@ -154,6 +149,7 @@ def main():
 
             # Get the clean slab.
             atoms_clean = get_atoms_slab(
+                bulk_structure=bulk_structure,
                 element_bulk=element_bulk,
                 miller_index=miller_index,
                 delta_ncoord=delta_ncoord,
@@ -176,26 +172,13 @@ def main():
             if show_sites is True:
                 mech.builder.plot()
 
-            atoms_ads_tot += mech.get_adsorbates(ads_name_list=ads_name_list)
-            atoms_neb_tot += mech.get_neb_images(reactions_list=reactions_list)
+            atoms_ads_tot += mech.get_adsorbates(adsorbate_list=adsorbate_list)
+            atoms_neb_tot += mech.get_neb_images(reaction_list=reaction_list)
 
     atoms_allnebs_tot = [atoms for atoms_neb in atoms_neb_tot for atoms in atoms_neb]
 
-    print(f"Number of adsorbates:     {len(atoms_ads_tot):.0f}")
-    print(f"Number of reaction paths: {len(atoms_allnebs_tot)/2:.0f}")
-
-    ####
-    from arkimede.workflow.utilities import get_name_TS
-    for atoms_IS_FS in atoms_neb_tot:
-        atoms_IS, atoms_FS = atoms_IS_FS
-        atoms_TS = atoms_IS.copy()
-        atoms_TS.info["name"] = get_name_TS(atoms_IS, atoms_FS)
-        print(atoms_TS.info["name"])
-    ###
-    
-    if show_gas_init is True and len(atoms_gas_tot) > 0:
-        gui = GUI(atoms_gas_tot)
-        gui.run()
+    print(f"Number of adsorbates: {len(atoms_ads_tot):.0f}")
+    print(f"Number of reactions:  {len(atoms_allnebs_tot)/2:.0f}")
 
     if show_clean_init is True and len(atoms_clean_tot) > 0:
         gui = GUI(atoms_clean_tot)
@@ -249,7 +232,7 @@ def run_calculations_reaction_mechanism(
         update_clean_slab_positions,
         print_results_calculation,
         get_images_neb_from_atoms_TS,
-        get_name_TS,
+        update_info_TS,
         check_same_connectivity,
     )
 
@@ -325,7 +308,7 @@ def run_calculations_reaction_mechanism(
                 write_images=write_images,
             )
             # Calculate vibrations.
-            if atoms.info["converged"]:
+            if atoms.info["converged"] and "vib_energies" not in atoms.info:
                 run_vibrations_calculation(atoms=atoms, calc=calc)
             write_atoms_to_db(atoms=atoms, db_ase=db_ase)
         
@@ -337,7 +320,7 @@ def run_calculations_reaction_mechanism(
         # Initialize the atoms TS as copy of the initial state and update its name.
         atoms_IS, atoms_FS = atoms_IS_FS
         atoms_TS = atoms_IS.copy()
-        atoms_TS.info["name"] = get_name_TS(atoms_IS, atoms_FS)
+        update_info_TS(atoms_TS=atoms_TS, atoms_IS=atoms_IS, atoms_FS=atoms_FS)
         bonds_TS = atoms_FS.info["bonds_TS"]
 
         # Directory to store output trajectories and images.
@@ -466,7 +449,7 @@ def run_calculations_reaction_mechanism(
 
         # If the TS is found, calculate vibrations.
         if atoms_TS.info["converged"] and atoms_TS.info["modified"] is False:
-            if "frequencies" not in atoms_TS.info:
+            if "vib_energies" not in atoms_TS.info:
                 run_vibrations_calculation(atoms=atoms_TS, calc=calc)
                 write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
 

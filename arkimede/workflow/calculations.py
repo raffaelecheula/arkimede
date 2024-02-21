@@ -46,7 +46,8 @@ def run_relax_calculation(
     )
     
     # Run the calculation.
-    converged = opt.run(fmax=fmax, steps=steps_max)
+    opt.run(fmax=fmax, steps=steps_max)
+    converged = opt.converged()
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
@@ -267,7 +268,11 @@ def run_dimer_calculation(
         opt.attach(reset_eigenmode_obs, interval = 1)
     
     # Run the calculation.
-    converged = opt.run(fmax=fmax, steps=steps_max)
+    try:
+        opt.run(fmax=fmax, steps=steps_max)
+        converged = opt.converged()
+    except:
+        converged = False
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_dimer.positions)
@@ -330,8 +335,11 @@ def run_climbbonds_calculation(
     )
     
     # Run the calculation.
-    opt.run(fmax=fmax, steps=steps_max)
-    converged = opt.converged()
+    try:
+        opt.run(fmax=fmax, steps=steps_max)
+        converged = opt.converged()
+    except:
+        converged = False
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
@@ -352,25 +360,30 @@ def run_climbbonds_calculation(
 # RUN VIBRATIONS CALCULATION
 # -----------------------------------------------------------------------------
 
-def run_vibrations_calculation(atoms, calc):
+def run_vibrations_calculation(atoms, calc, indices="not_surface"):
     """Run a vibrations calculation."""
     from ase.vibrations import Vibrations
     
-    # Initialize teh vibrations calculation.
+    # Get indices of atoms to vibrate.
+    if indices == "not_surface":
+        indices = list(range(len(atoms)))[atoms.info["n_atoms_clean"]:]
+    elif indices == "not_fixed":
+        indices = get_atoms_not_fixed(atoms)
+    
+    # Initialize the vibrations calculation.
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
-    indices = get_atoms_not_fixed(atoms)
     vib = Vibrations(atoms=atoms_copy, indices=indices, delta=0.01, nfree=2)
     
     # Run the calculation and get normal frequencies.
     vib.run()
-    frequencies = vib.get_frequencies()
+    vib_energies = vib.get_energies()
     vib.clean()
-    os.rmdir('vib')
+    os.rmdir("vib")
 
-    atoms.info["frequencies"] = frequencies
+    atoms.info["vib_energies"] = vib_energies
 
-    return frequencies
+    return vib_energies
 
 # -----------------------------------------------------------------------------
 # END
