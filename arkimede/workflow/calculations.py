@@ -22,6 +22,7 @@ def run_relax_calculation(
     directory='.',
     save_trajs=False,
     write_images=False,
+    update_cell = False,
 ):
     """Run a relax calculation."""
     from ase.optimize import BFGS
@@ -51,6 +52,8 @@ def run_relax_calculation(
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
+    if update_cell is True:
+        atoms.set_cell(atoms_copy.cell)
     atoms.calc = SinglePointCalculator(
         atoms=atoms,
         energy=atoms_copy.calc.results['energy'],
@@ -198,6 +201,7 @@ def run_dimer_calculation(
     directory='.',
     save_trajs=False,
     write_images=False,
+    update_cell = False,
     logfile='-',
     fmax=0.01,
     steps_max=500,
@@ -276,6 +280,8 @@ def run_dimer_calculation(
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_dimer.positions)
+    if update_cell is True:
+        atoms.set_cell(atoms_dimer.cell)
     atoms.calc = SinglePointCalculator(
         atoms = atoms,
         energy = atoms_dimer.calc.results['energy'],
@@ -302,6 +308,7 @@ def run_climbbonds_calculation(
     directory='.',
     save_trajs=False,
     write_images=False,
+    update_cell = False,
     logfile='-',
     fmax=0.01,
     steps_max=500,
@@ -343,6 +350,8 @@ def run_climbbonds_calculation(
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
+    if update_cell is True:
+        atoms.set_cell(atoms_copy.cell)
     atoms.calc = SinglePointCalculator(
         atoms=atoms,
         energy=atoms_copy.calc.results['energy'],

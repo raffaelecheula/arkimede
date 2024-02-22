@@ -14,21 +14,23 @@ def main():
     
     # Name of ase database.
     db_ase_name = "database.db"
-
+    
+    # Select atoms from the database.
+    calculation = "climbbonds"
+    selection = f"calculation={calculation}"
+    selection = "Rh>0,status=finished"
+    
     # Initialize ase database.
     db_ase = connect(name=db_ase_name)
 
-    selection = "calculation=climbbonds"
+    # Print number of selected atoms.
     selected = list(db_ase.select(selection=selection))
-    print(len(selected))
-    
-    selection = "calculation=climbbonds,status=finished"
-    selected = list(db_ase.select(selection=selection))
-    print(len(selected))
+    print(f"number of {calculation} calculations:", len(selected))
+    selected = list(db_ase.select(selection=f"{selection},status=finished"))
+    print(f"number of {calculation} converged:", len(selected))
     
     atoms_list = []
-    id_list = [aa.id for aa in db_ase.select(selection=selection)]
-    for id in id_list:
+    for id in [aa.id for aa in db_ase.select(selection=selection)]:
         atoms_row = db_ase.get(id=id)
         atoms = atoms_row.toatoms()
         atoms.info = atoms_row.data
@@ -36,7 +38,6 @@ def main():
     
     #gui = GUI(atoms_list)
     #gui.run()
-    
 
 # -----------------------------------------------------------------------------
 # IF NAME MAIN

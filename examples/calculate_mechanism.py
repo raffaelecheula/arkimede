@@ -4,8 +4,8 @@
 
 import os
 import numpy as np
-import copy as cp
-from ase.gui.gui import GUI
+from ocpmodels.common.relaxation.ase_utils import OCPCalculator
+from ocp_utils import get_checkpoint_path, checkpoints_basedir
 from arkimede.workflow.reaction_workflow import MechanismCalculator
 
 # -----------------------------------------------------------------------------
@@ -14,193 +14,54 @@ from arkimede.workflow.reaction_workflow import MechanismCalculator
 
 def main():
 
-    # Run the calculations.
-    run_calculations = False
+    # Name of ase database.
+    db_ase_name = "database.db"
+    db_ase_append = True
 
-    # Arkimede adsorption parameters.
-    auto_construct = True
-    delta_ncoord = 1
+    # Calculations parameters.
+    fmax = 0.05
+    steps_max_relax = 1000
+    steps_max_neb = 10
+    steps_max_ts_search = 1000
+    n_images_neb = 10
+    search_TS = "climbbonds" # dimer | climbbonds | climbfixinter
 
-    # Sites and reactions parameters.
-    range_edges_fun = lambda lc: [1e-2, lc + 1e-2]
-    displ_max_fun = lambda lc: lc * np.sqrt(2.0) / 4.0 + 1e-3
-    range_coads_fun = lambda lc: [
-        lc * np.sqrt(2.0) / 3.0 + 1e-3,
-        lc * np.sqrt(2.0) / 2.0 + 1e-3,
-    ]
+    # Save trajectories and write images.
+    save_trajs = False
+    write_images = False
+    basedir_trajs = "calculations"
 
-    # Show initial structures.
-    show_sites = False
-    show_gas_init = False
-    show_clean_init = False
-    show_ads_init = False
-    show_neb_init = False
+    # OCPmodels ase calculator.
+    checkpoint_key = 'EquiformerV2 (31M) All+MD'
+    checkpoint_path = get_checkpoint_path(
+        key = checkpoint_key,
+        basedir = checkpoints_basedir(),
+    )
+    calc = OCPCalculator(
+        checkpoint_path = checkpoint_path,
+        cpu = False,
+    )
 
-    # -----------------------------------------------------------------------------
-    # DATASET TASK
-    # -----------------------------------------------------------------------------
+    atoms_clean_tot = ... # TODO: read from db_ase_init
+    atoms_ads_tot = ...
+    atoms_neb_tot = ...
 
-    # Surface structures parameters.
-    bulk_structure = "fcc"
-    element_bulk_list = [
-        "Rh",
-        #"Cu",
-        #"Pd",
-        #"Co",
-        #"Ni",
-        #"Au",
-    ]
-    miller_index_list = [
-        "100",
-        #"110",
-        #"111",
-        
-        #"311c",
-        #"110c",
-        #"210",
-        #"211",
-        #"221",
-        #"310",
-        #"320",
-        #"311",
-        #"321",
-        #"331",
-    ]
-
-    # Adsorbates names.
-    adsorbate_list = [
-        "CO2**",
-        #"H2O*",
-        #"CO*",
-        #"H*",
-        #"OH*",
-        #"O*",
-        #"c-COOH**",
-        #"t-COOH**",
-        
-        #"CO2*",
-        #"c-COOH*",
-        #"t-COOH*",
-        #"HCOO*",
-        #"HCOO**",
-        #"HCO*",
-        #"HCO**",
-        #"COH*",
-        #"C*",
-        #"CH*",
-        #"CH2*",
-        #"CH3*",
-        #"H2COO**",
-        #"H2COOH**", 
-        #"H2CO**",
-        #"H3CO*",
-        #"HCOH**",
-        #"H2COH**",
-    ]
-
-    # Reactions names.
-    reaction_list = [
-        #"CO2**→CO*+O*",
-        #"H2O*→OH*+H*",
-        #"OH*→O*+H*",
-        #"t-COOH**→CO2**+H*",
-        #"c-COOH**→CO*+OH*",
-        
-        #"c-COOH**→COH*+O*",
-        #"HCOO**→CO2**+H*",
-        #"HCOO**→HCO**+O*",
-        #"HCO**→CO*+H*",
-        #"HCO**→CH*+O*",
-        #"COH*→CO*+H*",
-        #"COH*→C*+OH*",
-        #"CO*→C*+O*",
-        #"CH*→C*+H*",
-        #"CH2*→CH*+H*",
-        #"CH3*→CH2*+H*",
-        #"H3CO*→H2CO*+H*",
-        #"H2CO**→HCO**+H*",
-        #"H2CO**→CH2**+O*",
-        #"HCOH**→COH*+H*",
-        #"HCOH**→HCO*+H*",
-        #"HCOH**→CH*+OH*",
-        #"H2COH**→HCOH**+H*",
-        #"H2COH**→H2CO*+H*",
-        #"H2COH**→CH2*+OH*",
-        #"H2COO**→HCOO**+H*",
-        #"H2COO**→H2CO**+O*",
-        #"H2COOH**→H2COO**+H*",
-        #"H2COOH**→H2CO**+OH*",
-    ]
-
-    # -----------------------------------------------------------------------------
-    # STRUCTURES
-    # -----------------------------------------------------------------------------
-
-    # Import functions to produce ase atoms structures.
-    from ase_structures import get_atoms_slab, get_atoms_gas
-
-    atoms_clean_tot = []
-    atoms_ads_tot = []
-    atoms_neb_tot = []
-
-    # Get the atoms structures of clean surfaces and surfaces with adsorbates.
-    for element_bulk in element_bulk_list:
-        for miller_index in miller_index_list:
-
-            # Get the clean slab.
-            atoms_clean = get_atoms_slab(
-                bulk_structure=bulk_structure,
-                element_bulk=element_bulk,
-                miller_index=miller_index,
-                delta_ncoord=delta_ncoord,
-            )
-            atoms_clean_tot.append(atoms_clean)
-
-            lattice_const = atoms_clean.info["lattice_const"]
-            range_edges = range_edges_fun(lattice_const)
-            displ_max_reaction = displ_max_fun(lattice_const)
-            range_coadsorption = range_coads_fun(lattice_const)
-
-            mech = MechanismCalculator(
-                atoms_clean=atoms_clean,
-                get_atoms_gas_fun=get_atoms_gas,
-                range_edges=range_edges,
-                displ_max_reaction=displ_max_reaction,
-                range_coadsorption=range_coadsorption,
-                auto_construct=auto_construct,
-            )
-            if show_sites is True:
-                mech.builder.plot()
-
-            atoms_ads_tot += mech.get_adsorbates(adsorbate_list=adsorbate_list)
-            atoms_neb_tot += mech.get_neb_images(reaction_list=reaction_list)
-
-    atoms_allnebs_tot = [atoms for atoms_neb in atoms_neb_tot for atoms in atoms_neb]
-
-    print(f"Number of adsorbates: {len(atoms_ads_tot):.0f}")
-    print(f"Number of reactions:  {len(atoms_allnebs_tot)/2:.0f}")
-
-    if show_clean_init is True and len(atoms_clean_tot) > 0:
-        gui = GUI(atoms_clean_tot)
-        gui.run()
-
-    if show_ads_init is True and len(atoms_ads_tot) > 0:
-        gui = GUI(atoms_ads_tot)
-        gui.run()
-
-    if show_neb_init is True and len(atoms_allnebs_tot) > 0:
-        gui = GUI(atoms_allnebs_tot)
-        gui.run()
-
-    # TODO: create an ase.db instead
-
-    # Run the calculations.
-    if run_calculations is True:
-        run_calculations_reaction_mechanism(
-            atoms_clean_tot=atoms_clean_tot,
-            atoms_ads_tot=atoms_ads_tot,
-            atoms_neb_tot=atoms_neb_tot,
-        )
+    run_calculations_reaction_mechanism(
+        atoms_clean_tot=atoms_clean_tot,
+        atoms_ads_tot=atoms_ads_tot,
+        atoms_neb_tot=atoms_neb_tot,
+        db_ase_name=db_ase_name,
+        db_ase_append=db_ase_append,
+        fmax=fmax,
+        steps_max_relax=steps_max_relax,
+        steps_max_neb=steps_max_neb,
+        steps_max_ts_search=steps_max_ts_search,
+        n_images_neb=n_images_neb,
+        search_TS=search_TS,
+        save_trajs=save_trajs,
+        write_images=write_images,
+        basedir_trajs=basedir_trajs,
+    )
 
 # -----------------------------------------------------------------------------
 # RUN CALCULATIONS REACTION MECHANISM
@@ -210,11 +71,21 @@ def run_calculations_reaction_mechanism(
     atoms_clean_tot,
     atoms_ads_tot,
     atoms_neb_tot,
+    calc,
+    db_ase_name,
+    db_ase_append=True,
+    fmax=0.05,
+    steps_max_relax=500,
+    steps_max_neb=300,
+    steps_max_ts_search=1000,
+    n_images_neb=10,
+    search_TS="dimer",
+    save_trajs=False,
+    write_images=False,
+    basedir_trajs="calculations",
 ):
 
     from ase.db import connect
-    from ocpmodels.common.relaxation.ase_utils import OCPCalculator
-    from ocp_utils import get_checkpoint_path, checkpoints_basedir
     from arkimede.workflow.calculations import (
         run_relax_calculation,
         run_neb_calculation,
@@ -234,38 +105,6 @@ def run_calculations_reaction_mechanism(
         get_images_neb_from_atoms_TS,
         update_info_TS,
         check_same_connectivity,
-    )
-
-    # -----------------------------------------------------------------------------
-    # PARAMETERS
-    # -----------------------------------------------------------------------------
-
-    # Save trajectories and write images.
-    save_trajs = False
-    write_images = False
-    basedir_trajs = "calculations"
-
-    # Name of ase database.
-    db_ase_name = "database.db"
-    db_ase_append = True
-
-    # Calculations parameters.
-    fmax = 0.05
-    steps_max_relax = 1000
-    steps_max_neb = 10
-    steps_max_ts_search = 1000
-    n_images_neb = 10
-    search_TS = "climbbonds" # dimer | climbbonds | climbfixinter
-
-    # OCPmodels ase calculator.
-    checkpoint_key = 'EquiformerV2 (31M) All+MD'
-    checkpoint_path = get_checkpoint_path(
-        key = checkpoint_key,
-        basedir = checkpoints_basedir(),
-    )
-    calc = OCPCalculator(
-        checkpoint_path = checkpoint_path,
-        cpu = False,
     )
 
     # -----------------------------------------------------------------------------

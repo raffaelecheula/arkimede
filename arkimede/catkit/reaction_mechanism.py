@@ -441,10 +441,9 @@ class AdsorptionSites:
             Adsorption vector for edge.
         """
 
-        plane_points = np.hstack([np.array(ii) for ii in self.r1_topology[edge]])
-        if len(plane_points) < 3:
-            r2top = np.hstack([np.array(ii) for ii in self.r2_topology[edge]])
-            plane_points = np.hstack([plane_points, r2top])
+        plane_points = np.hstack([np.array(ii) for ii in self.r1_topology[edge]]*2)
+        r2top = np.hstack([np.array(ii) for ii in self.r2_topology[edge]])
+        plane_points = np.hstack([plane_points, r2top])
         vector = plane_normal(self.coords_surf[plane_points])
 
         return vector
