@@ -2,19 +2,13 @@
 # IMPORTS
 # -----------------------------------------------------------------------------
 
-import os
-import re
 import yaml
 import numpy as np
 from ase.io import read
 from ase.db import connect
-from ase.gui.gui import GUI
-from ocdata.utils.vasp import calculate_surface_k_points
 from ase.calculators.vasp.vasp import Vasp
-from arkimede.workflow.utilities import (
-    read_atoms_from_db,
-    write_atoms_to_db,
-)
+from ocdata.utils.vasp import calculate_surface_k_points
+from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
 
 # -----------------------------------------------------------------------------
 # MAIN
@@ -91,69 +85,9 @@ def main():
         basedir_dft_calc=basedir_dft_calc,
         filename_out=filename_out,
         calculation=calculation,
+        calculate_kpts_fun=calculate_surface_k_points,
         db_dft_name=db_dft_name,
     )
-
-# -----------------------------------------------------------------------------
-# RUN DFT CALCULATIONS K8S
-# -----------------------------------------------------------------------------
-
-def run_dft_calculations_k8s(
-    atoms_list,
-    calc,
-    template_yaml,
-    namespace,
-    basedir_dft_calc,
-    filename_out,
-    calculation,
-    db_dft,
-    cpu_req=8,
-    cpu_lim=12,
-    mem_req='8Gi',
-    mem_lim='24Gi',
-):
-    
-    from arkimede.workflow.dft_calculations import (
-        submit_k8s,
-        read_dft_output,
-    )
-    
-    # Read the template yaml file.
-    with open(template_yaml, 'r') as fileobj:
-        params_k8s = yaml.safe_load(fileobj)
-    
-    # Run the dft calculations.
-    cwd = os.getcwd()
-    for atoms in atoms_list:
-        atoms.pbc = True
-        atoms.info["calculation"] = calculation
-        if read_atoms_from_db(atoms=atoms, db_ase=db_dft) is None:
-            directory = os.path.join(basedir_dft_calc, atoms.info["name"])
-            os.makedirs(directory, exist_ok=True)
-            os.chdir(directory)
-            if os.path.isfile(filename_out):
-                read_dft_output(
-                    atoms=atoms,
-                    filename=filename_out,
-                )
-                if atoms.info["converged"] is True:
-                    atoms.set_tags(np.ones(len(atoms)))
-                    write_atoms_to_db(atoms=atoms, db_ase=db_dft)
-            else:
-                calc.set(kpts=calculate_surface_k_points(atoms))
-                calc.write_input(atoms=atoms)
-                submit_k8s(
-                    params_k8s=params_k8s,
-                    run_tag=atoms.info["name"],
-                    dirpath=os.path.join(cwd, directory),
-                    namespace=namespace,
-                    cpu_req=cpu_req,
-                    cpu_lim=cpu_lim,
-                    mem_req=mem_req,
-                    mem_lim=mem_lim,
-                )
-
-            os.chdir(cwd)
 
 # -----------------------------------------------------------------------------
 # IF NAME MAIN

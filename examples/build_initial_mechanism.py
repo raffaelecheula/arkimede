@@ -2,7 +2,6 @@
 # IMPORTS
 # -----------------------------------------------------------------------------
 
-import os
 import numpy as np
 from ase.gui.gui import GUI
 from ase.db import connect
