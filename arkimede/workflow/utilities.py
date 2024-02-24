@@ -305,5 +305,51 @@ def check_same_connectivity(atoms_1, atoms_2):
     return (connectivity_1 == connectivity_2).all()
 
 # -----------------------------------------------------------------------------
+# GET NAMES METADATA
+# -----------------------------------------------------------------------------
+
+def get_names_metadata(atoms_clean_tot, atoms_ads_tot, atoms_neb_tot):
+    """Get the structures names as dictionary."""
+    metadata = {
+        "clean": [
+            atoms.info["name"] for atoms in atoms_clean_tot
+        ],
+        "adsorbates": [
+            atoms.info["name"] for atoms in atoms_ads_tot
+        ],
+        "reactions": [
+            [atoms.info["name"] for atoms in atoms_neb] 
+            for atoms_neb in atoms_neb_tot
+        ],
+    }
+    return metadata
+
+# -----------------------------------------------------------------------------
+# GET ATOMS LIST FROM DB
+# -----------------------------------------------------------------------------
+
+def get_atoms_list_from_db(db_ase, selection, structure_type):
+    
+    atoms_list = []
+    for name in db_ase.metadata[structure_type]:
+        if isinstance(name, str):
+            selection_new = ",".join([selection, f"name={name}"])
+            atoms_row = db_ase.get(selection=selection_new)
+            atoms = atoms_row.toatoms()
+            atoms.info = atoms_row.data
+            atoms_list.append(atoms)
+        else:
+            atoms_ii_list = []
+            for name_ii in name:
+                selection_new = ",".join([selection, f"name={name_ii}"])
+                atoms_row = db_ase.get(selection=selection_new)
+                atoms = atoms_row.toatoms()
+                atoms.info = atoms_row.data
+                atoms_ii_list.append(atoms)
+            atoms_list.append(atoms_ii_list)
+    
+    return atoms_list
+
+# -----------------------------------------------------------------------------
 # END
 # -----------------------------------------------------------------------------

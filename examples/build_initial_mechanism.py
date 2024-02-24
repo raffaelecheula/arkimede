@@ -6,7 +6,7 @@ import os
 import numpy as np
 from ase.gui.gui import GUI
 from ase.db import connect
-from arkimede.workflow.utilities import write_atoms_to_db
+from arkimede.workflow.utilities import write_atoms_to_db, get_names_metadata
 from arkimede.workflow.reaction_workflow import MechanismCalculator
 
 # -----------------------------------------------------------------------------
@@ -15,12 +15,9 @@ from arkimede.workflow.reaction_workflow import MechanismCalculator
 
 def main():
 
-    # Name of ase database.
-    db_ase_init_name = "database_init.db"
-    db_ase_init_append = False
-
-    # Run the calculations.
-    run_calculations = False
+    # Name of ase database to store unrelaxed structures.
+    db_init_name = "database_init.db"
+    db_init_append = False
 
     # Arkimede adsorption parameters.
     auto_construct = True
@@ -185,13 +182,20 @@ def main():
     ]
     
     # Initialize ase database.
-    db_ase_init = connect(name=db_ase_init_name, append=db_ase_init_append)
+    db_init = connect(name=db_init_name, append=db_init_append)
+    
+    # Store structures names as metadata in the database.
+    db_init.metadata = get_names_metadata(
+        atoms_clean_tot=atoms_clean_tot,
+        atoms_ads_tot=atoms_ads_tot,
+        atoms_neb_tot=atoms_neb_tot,
+    )
     
     # Store initial structures into ade database.
     for atoms in atoms_clean_tot+atoms_ads_tot+atoms_allnebs_tot:
-        # TODO: give same id to nebs?
-        atoms.info["calculation"] = None
-        write_atoms_to_db(atoms=atoms, db_ase_init=db_ase_init)
+        atoms.info["calculation"] = "initial-structure"
+        atoms.info["converged"] = False
+        write_atoms_to_db(atoms=atoms, db_ase=db_init)
     
     print(f"Number of adsorbates: {len(atoms_ads_tot):.0f}")
     print(f"Number of reactions:  {len(atoms_neb_tot):.0f}")

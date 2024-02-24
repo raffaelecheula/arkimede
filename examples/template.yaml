@@ -1,0 +1,49 @@
+# VASP submission template.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: CHANGE_THIS
+  namespace: CHANGE_THIS
+spec:
+  ttlSecondsAfterFinished: 7200
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+        - args:
+          - mpirun -np 8 --map-by hwthread /opt/vasp.6.1.2_pgi_mkl_beef/bin/vasp_std > vasp.out 
+          name: CHANGE_THIS
+          image: ulissigroup/kubeflow_vasp:amptorch
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: 4
+              memory: 8Gi
+              nvidia.com/gpu: "0"
+            requests:
+              cpu: 4
+              memory: 8Gi
+          volumeMounts:
+          - mountPath: /home/jovyan/
+            name: workspace-raffaele-main
+          - mountPath: /home/jovyan/shared-scratch/
+            name: shared-scratch
+          - mountPath: /dev/shm
+            name: dshm
+          command:
+          - /bin/bash
+          - -c
+          workingDir: /home/jovyan/CHANGE_THIS
+      restartPolicy: Never
+      volumes:
+      - name: workspace-raffaele-main
+        persistentVolumeClaim:
+          claimName: workspace-raffaele-main
+      - name: shared-scratch
+        persistentVolumeClaim:
+          claimName: shared-scratch
+      - emptyDir:
+          medium: Memory
+        name: dshm
+      priorityClassName: default-priority

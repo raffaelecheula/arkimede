@@ -21,7 +21,7 @@ class MechanismCalculator:
         auto_construct=True,
     ):
         self.atoms_clean = atoms_clean
-        self.get_atoms_gas_fun = get_atoms_gas_fun # This could be a dictionary
+        self.get_atoms_gas_fun = get_atoms_gas_fun
         self.range_edges = range_edges
         self.displ_max_reaction = displ_max_reaction
         self.range_coadsorption = range_coadsorption

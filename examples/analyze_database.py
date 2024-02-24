@@ -13,7 +13,7 @@ from ase.gui.gui import GUI
 def main():
     
     # Name of ase database.
-    db_ase_name = "database.db"
+    db_ase_name = "database_ocp.db"
     
     # Select atoms from the database.
     calculation = "climbbonds"

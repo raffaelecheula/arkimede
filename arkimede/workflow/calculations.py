@@ -6,7 +6,7 @@ import os
 import numpy as np
 from ase.io import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
-from .utilities import get_atoms_not_fixed
+from arkimede.workflow.utilities import get_atoms_not_fixed
 
 # -----------------------------------------------------------------------------
 # RUN RELAX CALCULATION
@@ -314,7 +314,7 @@ def run_climbbonds_calculation(
     steps_max=500,
 ):
     """Run a climbbonds calculation."""
-    from .climbbonds import ClimbBondLengths
+    from arkimede.optimize.climbbonds import ClimbBonds
     from ase.optimize.ode import ODE12r
     
     # Create directory to store the results.
@@ -331,7 +331,7 @@ def run_climbbonds_calculation(
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
     atoms_copy.set_constraint(
-        atoms_copy.constraints+[ClimbBondLengths(bonds = bonds_TS)]
+        atoms_copy.constraints+[ClimbBonds(bonds = bonds_TS)]
     )
 
     # We use an ODE solver to improve convergence.
