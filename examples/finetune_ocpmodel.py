@@ -10,6 +10,8 @@ from ocp_utils import get_checkpoint_path, checkpoints_basedir
 
 def main():
     
+    # TODO: finish this!
+    
     # Name of ase dft database.
     db_ase_dft_name = "database_vasp.db"
     

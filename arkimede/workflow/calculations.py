@@ -253,22 +253,23 @@ def run_dimer_calculation(
         logfile = logfile,
     )
     
-    def reset_eigenmode_obs(opt = opt):
-        eigenmode = np.zeros((len(atoms_dimer), 3))
-        for bond in bonds_TS:
-            index_a, index_b, sign_bond = bond
-            if isinstance(sign_bond, str):
-                sign_bond = sign_bond_dict[sign_bond]
-            dir_bond = (
-                atoms_dimer.positions[index_a]-atoms_dimer.positions[index_b]
-            )
-            eigenmode[index_a] += +dir_bond * sign_bond
-            eigenmode[index_b] += -dir_bond * sign_bond
-        eigenmode /= np.linalg.norm(eigenmode)
-        opt.eigenmodes = [eigenmode/np.linalg.norm(eigenmode)]
-
-    # Attach observer.
+    # Observer that reset the eigenmode to the direction of the ts bonds.
+    # Maybe there is a better way of doind this (e.g., selecting the eigenmode 
+    # most similar to the directions of the ts bonds).
     if bonds_TS and reset_eigenmode:
+        def reset_eigenmode_obs(opt = opt):
+            eigenmode = np.zeros((len(atoms_dimer), 3))
+            for bond in bonds_TS:
+                index_a, index_b, sign_bond = bond
+                if isinstance(sign_bond, str):
+                    sign_bond = sign_bond_dict[sign_bond]
+                dir_bond = (
+                    atoms_dimer.positions[index_a]-atoms_dimer.positions[index_b]
+                )
+                eigenmode[index_a] += +dir_bond * sign_bond
+                eigenmode[index_b] += -dir_bond * sign_bond
+            eigenmode /= np.linalg.norm(eigenmode)
+            opt.eigenmodes = [eigenmode/np.linalg.norm(eigenmode)]
         opt.attach(reset_eigenmode_obs, interval = 1)
     
     # Run the calculation.
@@ -340,6 +341,91 @@ def run_climbbonds_calculation(
         logfile=logfile,
         trajectory=trajectory,
     )
+    
+    # Run the calculation.
+    try:
+        opt.run(fmax=fmax, steps=steps_max)
+        converged = opt.converged()
+    except:
+        converged = False
+    
+    # Update the input atoms with the results.
+    atoms.set_positions(atoms_copy.positions)
+    if update_cell is True:
+        atoms.set_cell(atoms_copy.cell)
+    atoms.calc = SinglePointCalculator(
+        atoms=atoms,
+        energy=atoms_copy.calc.results['energy'],
+        forces=atoms_copy.calc.results['forces'],
+    )
+    atoms.info["modified"] = False
+    atoms.info["converged"] = bool(converged)
+
+    # Write image.
+    if write_images is True:
+        filename = os.path.join(directory, f"{name}.png")
+        atoms.write(filename, radii=0.9, scale=200)
+
+# -----------------------------------------------------------------------------
+# RUN CLIMBBONDS CALCULATION
+# -----------------------------------------------------------------------------
+
+def run_climbfixinternals_calculation(
+    atoms,
+    bonds_TS,
+    calc,
+    name='climbfixinternals',
+    index_constr2climb=0,
+    directory='.',
+    save_trajs=False,
+    write_images=False,
+    update_cell = False,
+    logfile='-',
+    fmax=0.01,
+    steps_max=500,
+    max_displacement=None,
+):
+    """Run a climbfixinternals calculation."""
+    from arkimede.optimize.climbfixinternals import (
+        FixInternals,
+        BFGSClimbFixInternals,
+    )
+    
+    # TODO: check if this works!!
+    
+    # Create directory to store the results.
+    if save_trajs is True or write_images is True:
+        os.makedirs(directory, exist_ok=True)
+    
+    # Name of the trajectory file.
+    if save_trajs is True:
+        trajectory = os.path.join(directory, f'{name}.traj')
+    else:
+        trajectory = None
+    
+    # Create a copy of the atoms object to not mess with constraints.
+    atoms_copy = atoms.copy()
+    atoms_copy.calc = calc
+    
+    bonds = [[None, bond] for bond in bonds_TS]
+    atoms_copy.set_constraint([FixInternals(bonds=bonds)]+atoms.constraints)
+    
+    # We use an ODE solver to improve convergence.
+    opt = BFGSClimbFixInternals(
+        atoms=atoms_copy,
+        logfile=logfile,
+        trajectory=trajectory,
+        index_constr2climb=index_constr2climb,
+    )
+    
+    # Observer that checks if the ts structure has moved a lot.
+    # TODO: we can attach this also to the other ts search methods?
+    if max_displacement is not None:
+        def check_displacement():
+            displ = np.linalg.norm(atoms_copy.positions-atoms.positions)
+            if displ > max_displacement:
+                opt.max_steps = 0
+        opt.insert_observer(function=check_displacement, interval=10)
     
     # Run the calculation.
     try:
