@@ -172,6 +172,7 @@ def run_ase_calculations_mechanism(
         run_neb_calculation,
         run_dimer_calculation,
         run_climbbonds_calculation,
+        run_climbfixint_calculation,
         run_vibrations_calculation,
     )
     from arkimede.workflow.utilities import (
@@ -319,9 +320,7 @@ def run_ase_calculations_mechanism(
                         calc=calc,
                         steps_max=steps_max_ts_search,
                         bonds_TS=bonds_TS,
-                        vector=atoms_TS.info["vector"].copy(),
                         fmax=fmax,
-                        name="dimer",
                         directory=directory,
                         save_trajs=save_trajs,
                         write_images=write_images,
@@ -334,7 +333,17 @@ def run_ase_calculations_mechanism(
                         steps_max=steps_max_ts_search,
                         bonds_TS=bonds_TS,
                         fmax=fmax,
-                        name="climbbonds",
+                        directory=directory,
+                        save_trajs=save_trajs,
+                        write_images=write_images,
+                    )
+                elif search_TS == "climbfixint":
+                    run_climbfixint_calculation(
+                        atoms=atoms_TS,
+                        calc=calc,
+                        steps_max=steps_max_ts_search,
+                        bonds_TS=bonds_TS,
+                        fmax=fmax,
                         directory=directory,
                         save_trajs=save_trajs,
                         write_images=write_images,
@@ -382,8 +391,10 @@ def run_dft_calculations_k8s(
     basedir_dft_calc,
     filename_out,
     calculation,
-    calculate_kpts_fun,
     db_dft,
+    write_input_fun,
+    check_finished_fun,
+    job_queued_fun,
     cpu_req=8,
     cpu_lim=12,
     mem_req='8Gi',
@@ -393,6 +404,7 @@ def run_dft_calculations_k8s(
     from arkimede.workflow.utilities import (
         read_atoms_from_db,
         write_atoms_to_db,
+        print_results_calculation,
     )
     from arkimede.workflow.dft_calculations import (
         submit_k8s,
@@ -407,12 +419,14 @@ def run_dft_calculations_k8s(
     cwd = os.getcwd()
     for atoms in atoms_list:
         atoms.pbc = True
+        atoms.calc = calc
+        atoms.info["converged"] = False
         atoms.info["calculation"] = calculation
         if read_atoms_from_db(atoms=atoms, db_ase=db_dft) is None:
             directory = os.path.join(basedir_dft_calc, atoms.info["name"])
             os.makedirs(directory, exist_ok=True)
             os.chdir(directory)
-            if os.path.isfile(filename_out):
+            if os.path.isfile(filename_out) and check_finished_fun(filename_out):
                 read_dft_output(
                     atoms=atoms,
                     filename=filename_out,
@@ -420,12 +434,11 @@ def run_dft_calculations_k8s(
                 if atoms.info["converged"] is True:
                     atoms.set_tags(np.ones(len(atoms)))
                     write_atoms_to_db(atoms=atoms, db_ase=db_dft)
-            else:
-                calc.set(kpts=calculate_kpts_fun(atoms))
-                calc.write_input(atoms=atoms)
+            elif job_queued_fun(atoms.info["name"]) is False:
+                write_input_fun(atoms)
                 submit_k8s(
                     params_k8s=params_k8s,
-                    run_tag=atoms.info["name"],
+                    name=atoms.info["name"],
                     dirpath=os.path.join(cwd, directory),
                     namespace=namespace,
                     cpu_req=cpu_req,
@@ -435,6 +448,8 @@ def run_dft_calculations_k8s(
                 )
 
             os.chdir(cwd)
+        
+        print_results_calculation(atoms=atoms)
 
 # -----------------------------------------------------------------------------
 # END

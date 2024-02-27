@@ -271,13 +271,16 @@ def get_status_calculation(atoms):
 
 def print_results_calculation(atoms):
     """Print results of the calculation to screen."""
-    status = get_status_calculation(atoms)
-    energy = atoms.calc.results["energy"]
+    status_str = f'{get_status_calculation(atoms):15s}'
+    if "energy" in atoms.calc.results:
+        energy_str = f'{atoms.calc.results["energy"]:10.3f}'
+    else:
+        energy_str = None
     print(
         f'{atoms.info["name"]:100s}',
         f'{atoms.info["calculation"]:15s}',
-        f'{status:15s}',
-        f'{energy:10.3f}',
+        status_str,
+        energy_str,
     )
 
 # -----------------------------------------------------------------------------

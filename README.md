@@ -1,2 +1,2 @@
 # arkimede
-Auomatic reacions kinetic mechanism design.
+Auomatic reactions kinetic mechanism design.

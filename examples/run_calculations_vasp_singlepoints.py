@@ -7,7 +7,11 @@ import numpy as np
 from ase.io import read
 from ase.db import connect
 from ase.calculators.vasp.vasp import Vasp
-from ocdata.utils.vasp import calculate_surface_k_points
+from arkimede.workflow.dft_calculations import (
+    write_input_vasp,
+    check_finished_vasp,
+    job_queued_k8s,
+)
 from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
 
 # -----------------------------------------------------------------------------
@@ -20,7 +24,7 @@ def main():
     db_ase_name = "database_ocp.db"
 
     # Select atoms from the ase database.
-    selection = "calculation=climbbonds,status=finished"
+    selection = "calculation=climbbonds,status=finished,surf_structure=fcc-Rh-100"
     
     # Name of ase dft database to store the results of the dft calculations.
     db_dft_name = "database_vasp.db"
@@ -85,8 +89,10 @@ def main():
         basedir_dft_calc=basedir_dft_calc,
         filename_out=filename_out,
         calculation=calculation,
-        calculate_kpts_fun=calculate_surface_k_points,
-        db_dft_name=db_dft_name,
+        db_dft=db_dft,
+        write_input_fun=write_input_vasp,
+        check_finished_fun=check_finished_vasp,
+        job_queued_fun=job_queued_k8s,
     )
 
 # -----------------------------------------------------------------------------

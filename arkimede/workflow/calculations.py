@@ -22,7 +22,7 @@ def run_relax_calculation(
     directory='.',
     save_trajs=False,
     write_images=False,
-    update_cell = False,
+    update_cell=False,
 ):
     """Run a relax calculation."""
     from ase.optimize import BFGS
@@ -194,14 +194,14 @@ def run_neb_calculation(
 
 def run_dimer_calculation(
     atoms,
-    vector,
     calc,
     bonds_TS,
+    vector = None,
     name='dimer',
     directory='.',
     save_trajs=False,
     write_images=False,
-    update_cell = False,
+    update_cell=False,
     logfile='-',
     fmax=0.01,
     steps_max=500,
@@ -221,43 +221,46 @@ def run_dimer_calculation(
     else:
         trajectory = None
 
+    if vector is None and "vector" in atoms.info:
+        vector = atoms.info["vector"]
+
     atoms.calc = calc
     mask = get_atoms_not_fixed(atoms, return_mask=True)
     
     dimer_control = DimerControl(
-        initial_eigenmode_method = 'displacement',
-        displacement_method = 'vector',
-        logfile = None,
-        cg_translation = True,
-        use_central_forces = True,
-        extrapolate_forces = False,
-        order = 1,
-        f_rot_min = 0.10,
-        f_rot_max = 1.00,
-        max_num_rot = 1,
-        trial_angle = np.pi / 4,
-        trial_trans_step = 0.001,
-        maximum_translation = 0.10,
-        dimer_separation = 0.0001,
+        initial_eigenmode_method='displacement',
+        displacement_method='vector',
+        logfile=None,
+        cg_translation=True,
+        use_central_forces=True,
+        extrapolate_forces=False,
+        order=1,
+        f_rot_min=0.10,
+        f_rot_max=1.00,
+        max_num_rot=6,
+        trial_angle=np.pi/6,
+        trial_trans_step=0.005,
+        maximum_translation=0.100,
+        dimer_separation=0.005,
     )
     atoms_dimer = MinModeAtoms(
-        atoms = atoms,
-        control = dimer_control,
-        mask = mask,
+        atoms=atoms,
+        control=dimer_control,
+        mask=mask,
     )
     atoms_dimer.displace(displacement_vector=vector, mask=mask)
 
     opt = MinModeTranslate(
-        atoms = atoms_dimer,
-        trajectory = trajectory,
-        logfile = logfile,
+        atoms=atoms_dimer,
+        trajectory=trajectory,
+        logfile=logfile,
     )
     
     # Observer that reset the eigenmode to the direction of the ts bonds.
     # Maybe there is a better way of doind this (e.g., selecting the eigenmode 
     # most similar to the directions of the ts bonds).
     if bonds_TS and reset_eigenmode:
-        def reset_eigenmode_obs(opt = opt):
+        def reset_eigenmode_obs(atoms_dimer = atoms_dimer):
             eigenmode = np.zeros((len(atoms_dimer), 3))
             for bond in bonds_TS:
                 index_a, index_b, sign_bond = bond
@@ -269,26 +272,28 @@ def run_dimer_calculation(
                 eigenmode[index_a] += +dir_bond * sign_bond
                 eigenmode[index_b] += -dir_bond * sign_bond
             eigenmode /= np.linalg.norm(eigenmode)
-            opt.eigenmodes = [eigenmode/np.linalg.norm(eigenmode)]
-        opt.attach(reset_eigenmode_obs, interval = 1)
+            atoms_dimer.eigenmodes = [eigenmode/np.linalg.norm(eigenmode)]
+        opt.attach(reset_eigenmode_obs, interval=1)
     
     # Run the calculation.
-    try:
-        opt.run(fmax=fmax, steps=steps_max)
-        converged = opt.converged()
-    except:
-        converged = False
+    opt.run(fmax=fmax, steps=steps_max)
+    converged = opt.converged()
+    #try:
+    #    opt.run(fmax=fmax, steps=steps_max)
+    #    converged = opt.converged()
+    #except:
+    #    converged = False
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_dimer.positions)
     if update_cell is True:
         atoms.set_cell(atoms_dimer.cell)
     atoms.calc = SinglePointCalculator(
-        atoms = atoms,
-        energy = atoms_dimer.calc.results['energy'],
-        forces = atoms_dimer.calc.results['forces'],
+        atoms=atoms,
+        energy=atoms_dimer.calc.results['energy'],
+        forces=atoms_dimer.calc.results['forces'],
     )
-    atoms.info["vector"] = opt.eigenmodes[0]
+    atoms.info["vector"] = atoms_dimer.eigenmodes[0]
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
@@ -309,7 +314,7 @@ def run_climbbonds_calculation(
     directory='.',
     save_trajs=False,
     write_images=False,
-    update_cell = False,
+    update_cell=False,
     logfile='-',
     fmax=0.01,
     steps_max=500,
@@ -367,19 +372,19 @@ def run_climbbonds_calculation(
         atoms.write(filename, radii=0.9, scale=200)
 
 # -----------------------------------------------------------------------------
-# RUN CLIMBBONDS CALCULATION
+# RUN CLIMBFIXINT CALCULATION
 # -----------------------------------------------------------------------------
 
-def run_climbfixinternals_calculation(
+def run_climbfixint_calculation(
     atoms,
     bonds_TS,
     calc,
-    name='climbfixinternals',
+    name='climbfixint',
     index_constr2climb=0,
     directory='.',
     save_trajs=False,
     write_images=False,
-    update_cell = False,
+    update_cell=False,
     logfile='-',
     fmax=0.01,
     steps_max=500,
@@ -390,8 +395,6 @@ def run_climbfixinternals_calculation(
         FixInternals,
         BFGSClimbFixInternals,
     )
-    
-    # TODO: check if this works!!
     
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
@@ -407,7 +410,7 @@ def run_climbfixinternals_calculation(
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
     
-    bonds = [[None, bond] for bond in bonds_TS]
+    bonds = [[None, bond[:2]] for bond in bonds_TS]
     atoms_copy.set_constraint([FixInternals(bonds=bonds)]+atoms.constraints)
     
     # We use an ODE solver to improve convergence.

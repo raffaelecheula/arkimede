@@ -5,10 +5,19 @@
 import os
 import re
 import yaml
+import subprocess
 import numpy as np
 from ase.io import read
 from ase.io import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
+
+# -----------------------------------------------------------------------------
+# GET NAME K8S
+# -----------------------------------------------------------------------------
+
+def get_name_k8s(name):
+    """Replace forbidden characters in k8s name."""
+    return re.sub('[^0-9a-zA-Z]+', '-', name.lower())
 
 # -----------------------------------------------------------------------------
 # SUBMIT K8S
@@ -16,7 +25,7 @@ from ase.calculators.singlepoint import SinglePointCalculator
 
 def submit_k8s(
     params_k8s,
-    run_tag,
+    name,
     dirpath,
     namespace = None,
     command = None,
@@ -26,12 +35,12 @@ def submit_k8s(
     mem_lim = '24Gi',
 ):
     
-    # Replace forbidden characters in run_tag.
-    run_tag = re.sub('[^0-9a-zA-Z]+', '-', run_tag.lower())
+    # Replace forbidden characters in name.
+    name_k8s = get_name_k8s(name=name)
     
     # Modify some general parameters.
     params = params_k8s.copy()
-    params['metadata']['name'] = run_tag
+    params['metadata']['name'] = name_k8s
     if namespace is not None:
         params['metadata']['namespace'] = namespace
     
@@ -39,7 +48,7 @@ def submit_k8s(
     container = params['spec']['template']['spec']['containers'][0]
     if command is not None:
         container['args'][0] = command
-    container['name'] = run_tag
+    container['name'] = name_k8s
     container['workingDir'] = dirpath
     container['resources']['limits']['cpu'] = cpu_lim
     container['resources']['requests']['cpu'] = cpu_req
@@ -60,18 +69,18 @@ def submit_k8s(
 
 def read_dft_output(
     atoms,
-    filename = "vasprun.xml",
+    filename = "OUTCAR",
     name = "vasp",
     directory = ".",
     save_trajs = False,
     write_images = False,
     update_cell = False,
+    **kwargs,
 ):
     """Read dft output."""
 
     # Read dft output.
     atoms_out = read(os.path.join(directory, filename))
-    converged = True # TODO:
     
     # Save trajectory.
     if save_trajs is True:
@@ -92,12 +101,53 @@ def read_dft_output(
         forces=atoms_out.calc.results['forces'],
     )
     atoms.info["modified"] = False
-    atoms.info["converged"] = bool(converged)
+    atoms.info["converged"] = True
 
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{name}.png")
         atoms.write(filename, radii=0.9, scale=200)
+
+# -----------------------------------------------------------------------------
+# CHECK FILE CONTAINS
+# -----------------------------------------------------------------------------
+
+def check_file_contains(filename, key_string):
+    contains = False
+    with open(filename, 'r') as fileobj:
+        for line in fileobj.readlines():
+            if key_string in line:
+                contains = True
+                break
+    return contains
+
+# -----------------------------------------------------------------------------
+# CHECK FINISHED VASP
+# -----------------------------------------------------------------------------
+
+def check_finished_vasp(filename, key_string="Total CPU time used"):
+    return check_file_contains(filename=filename, key_string=key_string)
+
+# -----------------------------------------------------------------------------
+# WRITE VASP INPUT
+# -----------------------------------------------------------------------------
+
+def write_input_vasp(atoms):
+    from ocdata.utils.vasp import calculate_surface_k_points
+    atoms.calc.set(kpts=calculate_surface_k_points(atoms))
+    atoms.calc.write_input(atoms=atoms)
+
+# -----------------------------------------------------------------------------
+# JOB QUEUED K8S
+# -----------------------------------------------------------------------------
+
+def job_queued_k8s(name):
+    name_k8s = get_name_k8s(name=name)
+    output = subprocess.check_output(
+        "kubectl get jobs -o custom-columns=:.metadata.name",
+        shell=True,
+    ).decode("utf-8")
+    return name_k8s in output.split("\n")
 
 # -----------------------------------------------------------------------------
 # END

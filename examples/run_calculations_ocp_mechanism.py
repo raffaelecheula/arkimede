@@ -21,7 +21,7 @@ def main():
     selection = ""
 
     # Name of ase database to store the results of the calculations.
-    db_ase_name = "database_ocp.db"
+    db_ase_name = "database_ocp_climbfix.db"
     db_ase_append = True
 
     # Calculations parameters.
@@ -30,7 +30,7 @@ def main():
     steps_max_neb = 10
     steps_max_ts_search = 1000
     n_images_neb = 10
-    search_TS = "climbbonds" # dimer | climbbonds | climbfixinter
+    search_TS = "climbfixint" # dimer | climbbonds | climbfixint
 
     # Save trajectories and write images.
     save_trajs = False
@@ -40,12 +40,12 @@ def main():
     # OCPmodels ase calculator.
     checkpoint_key = 'EquiformerV2 (31M) All+MD'
     checkpoint_path = get_checkpoint_path(
-        key = checkpoint_key,
-        basedir = checkpoints_basedir(),
+        key=checkpoint_key,
+        basedir=checkpoints_basedir(),
     )
     calc = OCPCalculator(
-        checkpoint_path = checkpoint_path,
-        cpu = False,
+        checkpoint_path=checkpoint_path,
+        cpu=False,
     )
 
     # -----------------------------------------------------------------------------
