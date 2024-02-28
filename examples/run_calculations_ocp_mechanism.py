@@ -3,10 +3,9 @@
 # -----------------------------------------------------------------------------
 
 from ase.db import connect
-from ocpmodels.common.relaxation.ase_utils import OCPCalculator
-from ocp_utils import get_checkpoint_path, checkpoints_basedir
 from arkimede.workflow.reaction_workflow import run_ase_calculations_mechanism
 from arkimede.workflow.utilities import get_atoms_list_from_db
+from arkimede.ocp.ocp_utils import OCPCalculatorCounter, get_checkpoint_path
 
 # -----------------------------------------------------------------------------
 # MAIN
@@ -30,7 +29,7 @@ def main():
     steps_max_neb = 10
     steps_max_ts_search = 1000
     n_images_neb = 10
-    search_TS = "climbfixint" # dimer | climbbonds | climbfixint
+    search_TS = "climbbonds" # dimer | climbbonds | climbfixint | sella
 
     # Save trajectories and write images.
     save_trajs = False
@@ -38,16 +37,10 @@ def main():
     basedir_trajs = "calculations_ocp"
 
     # OCPmodels ase calculator.
-    checkpoint_key = 'EquiformerV2 (31M) All+MD'
-    checkpoint_path = get_checkpoint_path(
-        key=checkpoint_key,
-        basedir=checkpoints_basedir(),
-    )
-    calc = OCPCalculator(
-        checkpoint_path=checkpoint_path,
-        cpu=False,
-    )
-
+    checkpoint_key = 'GemNet-OC OC20+OC22' # 'EquiformerV2 (31M) All+MD'
+    checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
+    calc = OCPCalculatorCounter(checkpoint_path=checkpoint_path, cpu=False)
+    
     # -----------------------------------------------------------------------------
     # RUN ASE CALCULATIONS
     # -----------------------------------------------------------------------------

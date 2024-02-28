@@ -7,12 +7,12 @@ import numpy as np
 from ase.io import read
 from ase.db import connect
 from ase.calculators.vasp.vasp import Vasp
+from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
 from arkimede.workflow.dft_calculations import (
     write_input_vasp,
     check_finished_vasp,
     job_queued_k8s,
 )
-from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
 
 # -----------------------------------------------------------------------------
 # MAIN

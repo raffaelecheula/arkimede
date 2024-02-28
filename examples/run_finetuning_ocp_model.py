@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 
 import os
-from ocp_utils import (
+from arkimede.ocp.ocp_utils import (
     ocp_main,
     get_checkpoint_path,
     checkpoints_basedir,
@@ -22,13 +22,13 @@ def main():
     
     # Directory and identifier for fine-tuning.
     directory = "fine-tuning"
-    identifier = "train-test"
+    identifier = "fine-tuning"
     
     # Split the model into databases.
     train_test_val_split(
         db_ase_name=db_dft_name,
-        fractions=(0.9, 0.1),
-        filenames=("train.db", "val.db"),
+        fractions=(0.8, 0.1, 0.1),
+        filenames=("train.db", "test.db", "val.db"),
         directory=directory,
         seed=42,
     )
@@ -38,11 +38,9 @@ def main():
     output = f"{directory}/{identifier}.txt"
     
     # OCPmodels checkpoint path.
-    checkpoint_key = 'EquiformerV2 (31M) All+MD'
-    checkpoint_path = get_checkpoint_path(
-        key=checkpoint_key,
-        basedir=checkpoints_basedir(),
-    )
+    checkpoint_key = 'GemNet-OC OC20+OC22' # 'EquiformerV2 (31M) All+MD'
+    checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
+    
     
     delete_keys = [
         'slurm',
@@ -54,33 +52,27 @@ def main():
         'test_dataset',
         'val_dataset',
         'optim.loss_force',
-        'optim.scheduler',
-        'optim.scheduler_params',
+        #'optim.scheduler',
+        #'optim.scheduler_params',
     ]
     
     update_keys = {
         'gpus': 1,
         'task.dataset': 'ase_db',
-        'optim.batch_size': 1,
-        'optim.eval_every': 1,
-        'optim.max_epochs': 10,
+        'optim.eval_every': 4,
+        'optim.max_epochs': 1000,
         'optim.lr_initial': 4e-5,
-        'optim.scheduler': 'ReduceLROnPlateau',
-        'optim.scheduler_params.mode': 'min',
-        'optim.scheduler_params.factor': 0.8,
-        'optim.scheduler_params.patience': 3,
-        'dataset.train.src': 'train.db',
+        'optim.batch_size': 4,
+        'optim.num_workers': 4,
+        'dataset.train.src': f"{directory}/train.db",
         'dataset.train.a2g_args.r_energy': True,
         'dataset.train.a2g_args.r_forces': True,
-        'dataset.train.key_mapping.y': 'energy',
-        'dataset.train.key_mapping.force': 'forces',
-        'dataset.train.key_mapping.stress': 'stress',
-        'dataset.val.src': 'val.db',
+        'dataset.val.src': f"{directory}/val.db",
         'dataset.val.a2g_args.r_energy': True,
         'dataset.val.a2g_args.r_forces': True,
-        'dataset.val.key_mapping.y': 'energy',
-        'dataset.val.key_mapping.force': 'forces',
-        'dataset.val.key_mapping.stress': 'stress',
+        'task.primary_metric': "forces_mae",
+        'logger': 'wandb',
+        'optim.early_stopping_lr': 1e-8,
     }
     
     update_config_yaml(
@@ -102,7 +94,8 @@ def main():
     command = f"python {ocp_main()}"
     for arg in args_dict:
         command += f" --{arg} {args_dict[arg]}"
-    command += " > train.txt"
+    if output is not None:
+        command += f" > {output} 2>&1"
     os.system(command)
 
 # -----------------------------------------------------------------------------

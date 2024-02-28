@@ -170,9 +170,7 @@ def run_ase_calculations_mechanism(
     from arkimede.workflow.calculations import (
         run_relax_calculation,
         run_neb_calculation,
-        run_dimer_calculation,
-        run_climbbonds_calculation,
-        run_climbfixint_calculation,
+        run_TS_search_calculation,
         run_vibrations_calculation,
     )
     from arkimede.workflow.utilities import (
@@ -313,41 +311,17 @@ def run_ase_calculations_mechanism(
 
             atoms_TS.info["calculation"] = search_TS
             if read_atoms_from_db(atoms=atoms_TS, db_ase=db_ase) is None:
-                # Dimer calculation.
-                if search_TS == "dimer":
-                    run_dimer_calculation(
-                        atoms=atoms_TS,
-                        calc=calc,
-                        steps_max=steps_max_ts_search,
-                        bonds_TS=bonds_TS,
-                        fmax=fmax,
-                        directory=directory,
-                        save_trajs=save_trajs,
-                        write_images=write_images,
-                    )
-                # Climbbonds calculaton.
-                elif search_TS == "climbbonds":
-                    run_climbbonds_calculation(
-                        atoms=atoms_TS,
-                        calc=calc,
-                        steps_max=steps_max_ts_search,
-                        bonds_TS=bonds_TS,
-                        fmax=fmax,
-                        directory=directory,
-                        save_trajs=save_trajs,
-                        write_images=write_images,
-                    )
-                elif search_TS == "climbfixint":
-                    run_climbfixint_calculation(
-                        atoms=atoms_TS,
-                        calc=calc,
-                        steps_max=steps_max_ts_search,
-                        bonds_TS=bonds_TS,
-                        fmax=fmax,
-                        directory=directory,
-                        save_trajs=save_trajs,
-                        write_images=write_images,
-                    )
+                run_TS_search_calculation(
+                    atoms=atoms_TS,
+                    calc=calc,
+                    search_TS=search_TS,
+                    steps_max=steps_max_ts_search,
+                    bonds_TS=bonds_TS,
+                    fmax=fmax,
+                    directory=directory,
+                    save_trajs=save_trajs,
+                    write_images=write_images,
+                )
 
                 # Check if relaxing the TS gives the initial IS and FS.
                 #atoms_IS_2, atoms_FS_2 = get_new_IS_and_FS_from_atoms_TS(

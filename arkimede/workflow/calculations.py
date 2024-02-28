@@ -195,8 +195,8 @@ def run_neb_calculation(
 def run_dimer_calculation(
     atoms,
     calc,
-    bonds_TS,
-    vector = None,
+    bonds_TS=None,
+    vector=None,
     name='dimer',
     directory='.',
     save_trajs=False,
@@ -222,7 +222,7 @@ def run_dimer_calculation(
         trajectory = None
 
     if vector is None and "vector" in atoms.info:
-        vector = atoms.info["vector"]
+        vector = atoms.info["vector"].copy()
 
     atoms.calc = calc
     mask = get_atoms_not_fixed(atoms, return_mask=True)
@@ -423,7 +423,7 @@ def run_climbfixint_calculation(
     
     # Observer that checks if the ts structure has moved a lot.
     # TODO: we can attach this also to the other ts search methods?
-    if max_displacement is not None:
+    if max_displacement:
         def check_displacement():
             displ = np.linalg.norm(atoms_copy.positions-atoms.positions)
             if displ > max_displacement:
@@ -453,6 +453,144 @@ def run_climbfixint_calculation(
     if write_images is True:
         filename = os.path.join(directory, f"{name}.png")
         atoms.write(filename, radii=0.9, scale=200)
+
+# -----------------------------------------------------------------------------
+# RUN SELLA CALCULATION
+# -----------------------------------------------------------------------------
+
+def run_sella_calculation(
+    atoms,
+    calc,
+    bonds_TS,
+    name='sella',
+    directory='.',
+    save_trajs=False,
+    write_images=False,
+    update_cell=False,
+    logfile='-',
+    fmax=0.01,
+    steps_max=500,
+):
+    """Run a sella calculation."""
+    from sella import Sella, Constraints
+
+    # Create directory to store the results.
+    if save_trajs is True or write_images is True:
+        os.makedirs(directory, exist_ok=True)
+
+    # Name of the trajectory file.
+    if save_trajs is True:
+        trajectory = os.path.join(directory, f'{name}.traj')
+    else:
+        trajectory = None
+
+    atoms_copy = atoms.copy()
+    atoms_copy.calc = calc
+    indices = get_atoms_not_fixed(atoms_copy, return_mask=False)
+    
+    atoms_copy.constraints = []
+    constraints = Constraints(atoms_copy)
+    constraints.fix_translation(indices)
+    
+    opt = Sella(
+        atoms=atoms_copy,
+        constraints=constraints,
+        trajectory=trajectory,
+        logfile=logfile,
+    )
+    
+    # Run the calculation.
+    opt.run(fmax=fmax, steps=steps_max)
+    converged = opt.converged()
+    
+    # Update the input atoms with the results.
+    atoms.set_positions(atoms_copy.positions)
+    if update_cell is True:
+        atoms.set_cell(atoms_copy.cell)
+    atoms.calc = SinglePointCalculator(
+        atoms=atoms,
+        energy=atoms_copy.calc.results['energy'],
+        forces=atoms_copy.calc.results['forces'],
+    )
+    atoms.info["modified"] = False
+    atoms.info["converged"] = bool(converged)
+
+    # Write image.
+    if write_images is True:
+        filename = os.path.join(directory, f"{name}.png")
+        atoms.write(filename, radii=0.9, scale=200)
+
+# -----------------------------------------------------------------------------
+# RUN TS SEARCH CALCULATION
+# -----------------------------------------------------------------------------
+
+def run_TS_search_calculation(
+    atoms,
+    calc,
+    bonds_TS,
+    search_TS,
+    directory='.',
+    save_trajs=False,
+    write_images=False,
+    update_cell=False,
+    logfile='-',
+    fmax=0.01,
+    steps_max=500,
+    **kwargs,
+):
+    """Run TS search calculation."""
+    if search_TS == "dimer":
+        # Dimer calculation.
+        run_dimer_calculation(
+            atoms=atoms,
+            calc=calc,
+            steps_max=steps_max,
+            bonds_TS=bonds_TS,
+            fmax=fmax,
+            directory=directory,
+            save_trajs=save_trajs,
+            write_images=write_images,
+            **kwargs,
+        )
+    elif search_TS == "climbbonds":
+        # Climbbonds calculaton.
+        run_climbbonds_calculation(
+            atoms=atoms,
+            calc=calc,
+            steps_max=steps_max,
+            bonds_TS=bonds_TS,
+            fmax=fmax,
+            directory=directory,
+            save_trajs=save_trajs,
+            write_images=write_images,
+            **kwargs,
+        )
+    elif search_TS == "climbfixint":
+        # ClimbFixInternals calculaton.
+        run_climbfixint_calculation(
+            atoms=atoms,
+            calc=calc,
+            steps_max=steps_max,
+            bonds_TS=bonds_TS,
+            fmax=fmax,
+            directory=directory,
+            save_trajs=save_trajs,
+            write_images=write_images,
+            **kwargs,
+        )
+    elif search_TS == "sella":
+        # Sella calculaton.
+        run_sella_calculation(
+            atoms=atoms,
+            calc=calc,
+            steps_max=steps_max,
+            bonds_TS=bonds_TS,
+            fmax=fmax,
+            directory=directory,
+            save_trajs=save_trajs,
+            write_images=write_images,
+            **kwargs,
+        )
 
 # -----------------------------------------------------------------------------
 # RUN VIBRATIONS CALCULATION
