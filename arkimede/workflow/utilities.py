@@ -103,15 +103,55 @@ def get_atoms_TS_from_images_neb(images, atoms_TS=None, index_TS=None):
         "images_energies": [atoms.get_potential_energy() for atoms in images],
     })
     
-    vector = np.zeros((len(atoms_TS), 3))
-    if index_TS > 0:
-        vector += atoms_TS.positions-images[index_TS-1].positions
-    if index_TS < len(images)-1:
-        vector += images[index_TS+1].positions-atoms_TS.positions
-    vector /= np.linalg.norm(vector)
+    #vector = np.zeros((len(atoms_TS), 3))
+    #if index_TS > 0:
+    #    vector += atoms_TS.positions-images[index_TS-1].positions
+    #if index_TS < len(images)-1:
+    #    vector += images[index_TS+1].positions-atoms_TS.positions
+    #vector /= np.linalg.norm(vector)
+    vector = get_vector_from_images(images, index_TS)
     atoms_TS.info["vector"] = vector
     
     return atoms_TS
+
+# -----------------------------------------------------------------------------
+# GET VECTOR FROM IMAGES
+# -----------------------------------------------------------------------------
+
+def get_vector_from_images(images, index_TS):
+    """Get vector for a dimer calculation from images of a NEB calculation."""
+    vector = np.zeros((len(images[0]), 3))
+    if index_TS > 0:
+        vector += images[index_TS].positions-images[index_TS-1].positions
+    if index_TS < len(images)-1:
+        vector += images[index_TS+1].positions-images[index_TS].positions
+    vector /= np.linalg.norm(vector)
+    
+    return vector
+
+# -----------------------------------------------------------------------------
+# GET VECTOR FROM IMAGES
+# -----------------------------------------------------------------------------
+
+def get_vector_from_bonds_TS(
+    atoms,
+    bonds_TS,
+    sign_bond_dict={'break': +1, 'form': -1},
+):
+    """Get vector for a dimer calculation from the TS bonds."""
+    vector = np.zeros((len(atoms), 3))
+    for bond in bonds_TS:
+        index_a, index_b, sign_bond = bond
+        if isinstance(sign_bond, str):
+            sign_bond = sign_bond_dict[sign_bond]
+        dir_bond = (
+            atoms.positions[index_a]-atoms.positions[index_b]
+        )
+        vector[index_a] += +dir_bond * sign_bond
+        vector[index_b] += -dir_bond * sign_bond
+    vector /= np.linalg.norm(vector)
+    
+    return vector
 
 # -----------------------------------------------------------------------------
 # ATOMS IMAGES NEB FROM ATOMS TS 

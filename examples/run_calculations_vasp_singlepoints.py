@@ -51,7 +51,7 @@ def main():
         "ediffg": 0.0,
         "symprec": 1e-10,
         "encut": 350.0,
-        "ncore": 1,
+        "ncore": 2,
         "lcharg": False,
         "lwave": False,
         "gga": "RP",

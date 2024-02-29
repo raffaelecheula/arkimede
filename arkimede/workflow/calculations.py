@@ -210,6 +210,7 @@ def run_dimer_calculation(
 ):
     """Run a dimer calculation."""
     from ase.dimer import DimerControl, MinModeAtoms, MinModeTranslate
+    from arkimede.workflow.utilities import get_vector_from_bonds_TS
 
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
@@ -261,18 +262,12 @@ def run_dimer_calculation(
     # most similar to the directions of the ts bonds).
     if bonds_TS and reset_eigenmode:
         def reset_eigenmode_obs(atoms_dimer = atoms_dimer):
-            eigenmode = np.zeros((len(atoms_dimer), 3))
-            for bond in bonds_TS:
-                index_a, index_b, sign_bond = bond
-                if isinstance(sign_bond, str):
-                    sign_bond = sign_bond_dict[sign_bond]
-                dir_bond = (
-                    atoms_dimer.positions[index_a]-atoms_dimer.positions[index_b]
-                )
-                eigenmode[index_a] += +dir_bond * sign_bond
-                eigenmode[index_b] += -dir_bond * sign_bond
-            eigenmode /= np.linalg.norm(eigenmode)
-            atoms_dimer.eigenmodes = [eigenmode/np.linalg.norm(eigenmode)]
+            vector = get_vector_from_bonds_TS(
+                atoms=atoms_dimer,
+                bonds_TS=bonds_TS,
+                sign_bond_dict=sign_bond_dict,
+            )
+            atoms_dimer.eigenmodes = [vector]
         opt.attach(reset_eigenmode_obs, interval=1)
     
     # Run the calculation.

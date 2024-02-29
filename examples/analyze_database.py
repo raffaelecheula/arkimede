@@ -13,12 +13,12 @@ from ase.gui.gui import GUI
 def main():
     
     # Name of ase database.
-    db_ase_name = "database_ocp.db"
+    db_ase_name = "database_ocp_2.db"
     
     # Select atoms from the database.
-    calculation = "climbbonds"
+    calculation = "dimer"
     selection = f"calculation={calculation}"
-    selection = "Rh>0,status=finished"
+    #selection = "Rh>0,status=finished"
     
     # Initialize ase database.
     db_ase = connect(name=db_ase_name)
@@ -36,8 +36,8 @@ def main():
         atoms.info = atoms_row.data
         atoms_list.append(atoms)
     
-    #gui = GUI(atoms_list)
-    #gui.run()
+    gui = GUI(atoms_list)
+    gui.run()
 
 # -----------------------------------------------------------------------------
 # IF NAME MAIN

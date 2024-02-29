@@ -49,7 +49,7 @@ def submit_k8s(
     if command is not None:
         container['args'][0] = command
     container['name'] = name_k8s
-    container['workingDir'] = dirpath
+    container['workingDir'] = os.path.abspath(dirpath)
     container['resources']['limits']['cpu'] = cpu_lim
     container['resources']['requests']['cpu'] = cpu_req
     container['args'][0] = re.sub('-np \d+', f'-np {cpu_req}', container['args'][0])
@@ -129,13 +129,22 @@ def check_finished_vasp(filename, key_string="Total CPU time used"):
     return check_file_contains(filename=filename, key_string=key_string)
 
 # -----------------------------------------------------------------------------
-# WRITE VASP INPUT
+# WRITE INPUT VASP
 # -----------------------------------------------------------------------------
 
 def write_input_vasp(atoms):
     from ocdata.utils.vasp import calculate_surface_k_points
     atoms.calc.set(kpts=calculate_surface_k_points(atoms))
     atoms.calc.write_input(atoms=atoms)
+
+# -----------------------------------------------------------------------------
+# WRITE VASP INPUT
+# -----------------------------------------------------------------------------
+
+def write_modecar_vasp(vector):
+    with open('MODECAR', 'w+') as fileobj:
+        for line in vector:
+            print("{0:20.10E} {1:20.10E} {2:20.10E}".format(*line), file=fileobj)
 
 # -----------------------------------------------------------------------------
 # JOB QUEUED K8S
