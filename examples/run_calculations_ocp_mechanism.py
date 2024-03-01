@@ -30,7 +30,7 @@ def main():
     steps_max_neb = 10
     steps_max_ts_search = 1000
     n_images_neb = 10
-    search_TS = "dimer" # dimer | climbbonds | climbfixint | sella
+    search_TS = "climbbonds" # dimer | climbbonds | climbfixint | sella
 
     # Save trajectories and write images.
     save_trajs = False

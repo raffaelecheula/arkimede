@@ -405,6 +405,7 @@ def run_climbfixint_calculation(
     logfile='-',
     fmax=0.01,
     steps_max=500,
+    optB_kwargs={'logfile': '-', 'trajectory': None},
     max_displacement=None,
 ):
     """Run a climbfixinternals calculation."""
@@ -436,6 +437,7 @@ def run_climbfixint_calculation(
         logfile=logfile,
         trajectory=trajectory,
         index_constr2climb=index_constr2climb,
+        optB_kwargs=optB_kwargs,
     )
     
     # Observer that checks the displacement of the ts from the starting position.

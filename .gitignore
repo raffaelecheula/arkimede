@@ -6,6 +6,12 @@ __pycache__/
 # C extensions
 *.so
 
+# Custom
+*.db
+checkpoints/*
+examples/calculations*
+examples/fine-tuning*
+
 # Distribution / packaging
 .Python
 build/
@@ -25,9 +31,6 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-checkpoints/
-examples/calculations*
-examples/fine-tuning*
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
