@@ -165,6 +165,9 @@ def run_ase_calculations_mechanism(
     save_trajs=False,
     write_images=False,
     basedir_trajs="calculations",
+    check_modified_relax=False,
+    check_modified_neb=False,
+    check_modified_TS_search=False,
 ):
 
     from arkimede.workflow.calculations import (
@@ -213,6 +216,7 @@ def run_ase_calculations_mechanism(
         atoms.info["calculation"] = "relax"
         if read_atoms_from_db(atoms=atoms, db_ase=db_ase) is None:
             update_clean_slab_positions(atoms=atoms, db_ase=db_ase)
+            atoms_copy = atoms.copy()
             run_relax_calculation(
                 atoms=atoms,
                 calc=calc,
@@ -223,6 +227,9 @@ def run_ase_calculations_mechanism(
                 save_trajs=save_trajs,
                 write_images=write_images,
             )
+            if check_modified_relax is True:
+                if check_same_connectivity(atoms_copy, atoms) is False:
+                    atoms.info["modified"] = True
             # Calculate vibrations.
             if atoms.info["converged"] and "vib_energies" not in atoms.info:
                 run_vibrations_calculation(atoms=atoms, calc=calc)
@@ -286,23 +293,24 @@ def run_ase_calculations_mechanism(
             get_atoms_TS_from_images_neb(images=images, atoms_TS=atoms_TS)
 
             # Check if relaxing the TS gives the initial IS and FS.
-            #if atoms_TS.info["converged"] is False:
-            #    atoms_IS_1, atoms_FS_1 = get_new_IS_and_FS_from_images(images=images)
-            #    for ss, atoms in {"IS_1": atoms_IS_1, "FS_1": atoms_FS_1}.items():
-            #        run_relax_calculation(
-            #            atoms=atoms,
-            #            calc=calc,
-            #            fmax=fmax,
-            #            steps_max=steps_max_relax,
-            #            name=f"relax_{ss}",
-            #            directory=directory,
-            #            save_trajs=save_trajs,
-            #            write_images=write_images,
-            #        )
-            #    check_IS = check_same_connectivity(atoms_IS, atoms_IS_1)
-            #    check_FS = check_same_connectivity(atoms_FS, atoms_FS_1)
-            #    if bool(check_IS*check_FS) is False:
-            #        atoms_TS.info["modified"] = True
+            if check_modified_neb is True:
+                atoms_IS_1, atoms_FS_1 = get_new_IS_and_FS_from_images(images=images)
+                for ss, atoms in {"IS_1": atoms_IS_1, "FS_1": atoms_FS_1}.items():
+                    run_relax_calculation(
+                        atoms=atoms,
+                        calc=calc,
+                        fmax=fmax,
+                        steps_max=steps_max_relax,
+                        name=f"relax_{ss}",
+                        directory=directory,
+                        save_trajs=save_trajs,
+                        write_images=write_images,
+                    )
+                check_IS = check_same_connectivity(atoms_IS, atoms_IS_1)
+                check_FS = check_same_connectivity(atoms_FS, atoms_FS_1)
+                if bool(check_IS*check_FS) is False:
+                    atoms_TS.info["modified"] = True
+            
             write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
         print_results_calculation(atoms=atoms_TS)
 
@@ -324,25 +332,26 @@ def run_ase_calculations_mechanism(
                 )
 
                 # Check if relaxing the TS gives the initial IS and FS.
-                #atoms_IS_2, atoms_FS_2 = get_new_IS_and_FS_from_atoms_TS(
-                #    atoms_TS=atoms_TS,
-                #    bonds_TS=bonds_TS,
-                #)
-                #for ss, atoms in {"IS_2": atoms_IS_2, "FS_2": atoms_FS_2}.items():
-                #    run_relax_calculation(
-                #        atoms=atoms,
-                #        calc=calc,
-                #        fmax=fmax,
-                #        steps_max=steps_max_relax,
-                #        name=f'relax_{ss}_2',
-                #        directory=directory,
-                #        save_trajs=save_trajs,
-                #        write_images=write_images,
-                #    )
-                #check_IS = check_same_connectivity(atoms_IS, atoms_IS_2)
-                #check_FS = check_same_connectivity(atoms_FS, atoms_FS_2)
-                #if bool(check_IS*check_FS) is False:
-                #    atoms_TS.info["modified"] = True
+                if check_modified_TS_search is True:
+                    atoms_IS_2, atoms_FS_2 = get_new_IS_and_FS_from_atoms_TS(
+                        atoms_TS=atoms_TS,
+                        bonds_TS=bonds_TS,
+                    )
+                    for ss, atoms in {"IS_2": atoms_IS_2, "FS_2": atoms_FS_2}.items():
+                        run_relax_calculation(
+                            atoms=atoms,
+                            calc=calc,
+                            fmax=fmax,
+                            steps_max=steps_max_relax,
+                            name=f'relax_{ss}_2',
+                            directory=directory,
+                            save_trajs=save_trajs,
+                            write_images=write_images,
+                        )
+                    check_IS = check_same_connectivity(atoms_IS, atoms_IS_2)
+                    check_FS = check_same_connectivity(atoms_FS, atoms_FS_2)
+                    if bool(check_IS*check_FS) is False:
+                        atoms_TS.info["modified"] = True
 
                 write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
             print_results_calculation(atoms=atoms_TS)

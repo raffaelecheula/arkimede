@@ -28,12 +28,12 @@ def submit_k8s(
     params_k8s,
     name,
     dirpath,
-    namespace = None,
-    command = None,
-    cpu_req = 8,
-    cpu_lim = 12,
-    mem_req = '8Gi',
-    mem_lim = '24Gi',
+    namespace=None,
+    command=None,
+    cpu_req=8,
+    cpu_lim=12,
+    mem_req='8Gi',
+    mem_lim='24Gi',
 ):
     
     # Replace forbidden characters in name.
@@ -70,12 +70,12 @@ def submit_k8s(
 
 def read_dft_output(
     atoms,
-    filename = "OUTCAR",
-    name = "vasp",
-    directory = ".",
-    save_trajs = False,
-    write_images = False,
-    update_cell = False,
+    filename="OUTCAR",
+    name="vasp",
+    directory=".",
+    save_trajs=False,
+    write_images=False,
+    update_cell=False,
     **kwargs,
 ):
     """Read dft output."""
@@ -86,8 +86,8 @@ def read_dft_output(
     # Save trajectory.
     if save_trajs is True:
         traj = Trajectory(
-            filename = os.path.join(directory, f'{name}.traj'),
-            mode = 'w',
+            filename=os.path.join(directory, f'{name}.traj'),
+            mode='w',
         )
         for atoms in read(os.path.join(directory, filename), ':'):
             traj.write(atoms)
@@ -145,9 +145,9 @@ def write_input_vasp(atoms, auto_kpts=True):
     atoms.calc.write_input(atoms=atoms)
     # Write vector for vasp dimer calculation.
     params = atoms.calc.todict()
-    if "ibrion" in params and params["ibrion"] == 3:
+    if params.get("ibrion") == 3:
         write_vector_modecar_vasp(vector=atoms.info["vector"])
-    elif "ibrion" in params and params["ibrion"] == 44:
+    elif params.get("ibrion") == 44:
         write_vector_poscar_vasp(vector=atoms.info["vector"])
 
 # -----------------------------------------------------------------------------

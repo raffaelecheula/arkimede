@@ -108,33 +108,33 @@ def run_neb_calculation(
     if use_OCPdyNEB:
         from ocpneb.core import OCPdyNEB
         neb = OCPdyNEB(
-            images = images,
-            checkpoint_path = calc.config['checkpoint'],
-            k = k_neb,
-            climb = False,
-            dynamic_relaxation = False,
-            method = "aseneb",
-            cpu = False,
-            batch_size = 4,
+            images=images,
+            checkpoint_path=calc.config['checkpoint'],
+            k=k_neb,
+            climb=False,
+            dynamic_relaxation=False,
+            method="aseneb",
+            cpu=False,
+            batch_size=4,
         )
     else:
         from ase.neb import NEB
         neb = NEB(
-            images = images,
-            k = k_neb,
-            climb = False,
-            parallel = False,
-            method = 'aseneb',
-            allow_shared_calculator = True,
+            images=images,
+            k=k_neb,
+            climb=False,
+            parallel=False,
+            method='aseneb',
+            allow_shared_calculator=True,
         )
         for atoms in images:
             atoms.calc = calc
         for ii in (0, -1):
             images[ii].get_potential_energy()
             images[ii].calc = SinglePointCalculator(
-                atoms = images[ii],
-                energy = images[ii].calc.results["energy"],
-                forces = images[ii].calc.results["forces"],
+                atoms=images[ii],
+                energy=images[ii].calc.results["energy"],
+                forces=images[ii].calc.results["forces"],
             )
     
     # Choose optimizer.
@@ -176,7 +176,7 @@ def run_neb_calculation(
     
     # Write trajectory.
     if save_trajs is True:
-        traj = Trajectory(filename = trajectory, mode = 'w')
+        traj = Trajectory(filename=trajectory, mode='w')
         for atoms in images:
             traj.write(atoms)
     
@@ -227,8 +227,8 @@ def run_dimer_calculation(
     else:
         trajectory = None
 
-    if vector is None and "vector" in atoms.info:
-        vector = atoms.info["vector"].copy()
+    if vector is None:
+        vector = atoms.info.get("vector").copy()
 
     atoms.calc = calc
     mask = get_atoms_not_fixed(atoms, return_mask=True)
