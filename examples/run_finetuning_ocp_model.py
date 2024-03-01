@@ -6,7 +6,6 @@ import os
 from arkimede.ocp.ocp_utils import (
     ocp_main,
     get_checkpoint_path,
-    checkpoints_basedir,
     train_test_val_split,
     update_config_yaml,
 )

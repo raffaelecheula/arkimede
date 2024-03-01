@@ -7,6 +7,7 @@ import numpy as np
 from ase.io import read
 from ase.db import connect
 from ase.calculators.vasp.vasp import Vasp
+from arkimede.utils import templates_basedir
 from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
 from arkimede.workflow.dft_calculations import (
     write_input_vasp,
@@ -34,7 +35,7 @@ def main():
     basedir_dft_calc = "calculations_vasp"
     
     # Name of the template yaml file and namespace for kubernetes submission.
-    template_yaml = "template.yaml"
+    template_yaml = templates_basedir() / "template_vasp_k8s.yaml"
     namespace = "raffaelecheula"
     
     # Filename and name of dft calculation.

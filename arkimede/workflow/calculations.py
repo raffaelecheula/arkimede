@@ -6,7 +6,7 @@ import os
 import numpy as np
 from ase.io import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
-from arkimede.workflow.utilities import get_atoms_not_fixed
+from arkimede.workflow.utilities import get_atoms_not_fixed, get_atoms_not_surface
 
 # -----------------------------------------------------------------------------
 # RUN RELAX CALCULATION
@@ -47,8 +47,12 @@ def run_relax_calculation(
     )
     
     # Run the calculation.
-    opt.run(fmax=fmax, steps=steps_max)
-    converged = opt.converged()
+    try:
+        opt.run(fmax=fmax, steps=steps_max)
+        converged = opt.converged()
+    except Exception as error:
+        print(error)
+        converged = False
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
@@ -205,6 +209,7 @@ def run_dimer_calculation(
     logfile='-',
     fmax=0.01,
     steps_max=500,
+    max_displacement=False,
     reset_eigenmode=True,
     sign_bond_dict={'break': +1, 'form': -1},
 ):
@@ -258,8 +263,8 @@ def run_dimer_calculation(
     )
     
     # Observer that reset the eigenmode to the direction of the ts bonds.
-    # Maybe there is a better way of doind this (e.g., selecting the eigenmode 
-    # most similar to the directions of the ts bonds).
+    # TODO: Maybe there is a better way of doind this (e.g., selecting the 
+    # eigenmode most similar to the directions of the ts bonds).
     if bonds_TS and reset_eigenmode:
         def reset_eigenmode_obs(atoms_dimer = atoms_dimer):
             vector = get_vector_from_bonds_TS(
@@ -270,14 +275,21 @@ def run_dimer_calculation(
             atoms_dimer.eigenmodes = [vector]
         opt.attach(reset_eigenmode_obs, interval=1)
     
+    # Observer that checks the displacement of the ts from the starting position.
+    if max_displacement:
+        def check_displacement():
+            displ = np.linalg.norm(atoms_dimer.positions-atoms.positions)
+            if displ > max_displacement:
+                opt.max_steps = 0
+        opt.insert_observer(function=check_displacement, interval=10)
+    
     # Run the calculation.
-    opt.run(fmax=fmax, steps=steps_max)
-    converged = opt.converged()
-    #try:
-    #    opt.run(fmax=fmax, steps=steps_max)
-    #    converged = opt.converged()
-    #except:
-    #    converged = False
+    try:
+        opt.run(fmax=fmax, steps=steps_max)
+        converged = opt.converged()
+    except Exception as error:
+        print(error)
+        converged = False
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_dimer.positions)
@@ -313,6 +325,7 @@ def run_climbbonds_calculation(
     logfile='-',
     fmax=0.01,
     steps_max=500,
+    max_displacement=None,
 ):
     """Run a climbbonds calculation."""
     from arkimede.optimize.climbbonds import ClimbBonds
@@ -342,11 +355,20 @@ def run_climbbonds_calculation(
         trajectory=trajectory,
     )
     
+    # Observer that checks the displacement of the ts from the starting position.
+    if max_displacement:
+        def check_displacement():
+            displ = np.linalg.norm(atoms_copy.positions-atoms.positions)
+            if displ > max_displacement:
+                opt.max_steps = 0
+        opt.insert_observer(function=check_displacement, interval=10)
+    
     # Run the calculation.
     try:
         opt.run(fmax=fmax, steps=steps_max)
         converged = opt.converged()
-    except:
+    except Exception as error:
+        print(error)
         converged = False
     
     # Update the input atoms with the results.
@@ -416,8 +438,7 @@ def run_climbfixint_calculation(
         index_constr2climb=index_constr2climb,
     )
     
-    # Observer that checks if the ts structure has moved a lot.
-    # TODO: we can attach this also to the other ts search methods?
+    # Observer that checks the displacement of the ts from the starting position.
     if max_displacement:
         def check_displacement():
             displ = np.linalg.norm(atoms_copy.positions-atoms.positions)
@@ -429,7 +450,8 @@ def run_climbfixint_calculation(
     try:
         opt.run(fmax=fmax, steps=steps_max)
         converged = opt.converged()
-    except:
+    except Exception as error:
+        print(error)
         converged = False
     
     # Update the input atoms with the results.
@@ -495,8 +517,12 @@ def run_sella_calculation(
     )
     
     # Run the calculation.
-    opt.run(fmax=fmax, steps=steps_max)
-    converged = opt.converged()
+    try:
+        opt.run(fmax=fmax, steps=steps_max)
+        converged = opt.converged()
+    except Exception as error:
+        print(error)
+        converged = False
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
@@ -597,7 +623,7 @@ def run_vibrations_calculation(atoms, calc, indices="not_surface"):
     
     # Get indices of atoms to vibrate.
     if indices == "not_surface":
-        indices = list(range(len(atoms)))[atoms.info["n_atoms_clean"]:]
+        indices = get_atoms_not_surface(atoms)
     elif indices == "not_fixed":
         indices = get_atoms_not_fixed(atoms)
     

@@ -6,7 +6,7 @@ metadata:
   name: CHANGE_THIS
   namespace: CHANGE_THIS
 spec:
-  ttlSecondsAfterFinished: 7200
+  ttlSecondsAfterFinished: 1800
   backoffLimit: 0
   template:
     spec:

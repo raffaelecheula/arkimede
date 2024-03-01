@@ -39,6 +39,18 @@ def get_atoms_not_fixed(atoms, return_mask=False):
         return indices
 
 # -----------------------------------------------------------------------------
+# GET ATOMS NOT SURFACE
+# -----------------------------------------------------------------------------
+
+def get_atoms_not_surface(atoms, return_mask=False):
+    """Get atoms with index higher than n_atoms_clean."""
+    indices = list(range(len(atoms)))[atoms.info["n_atoms_clean"]:]
+    if return_mask:
+        return [True if ii in indices else False for ii in range(len(atoms))]
+    else:
+        return indices
+
+# -----------------------------------------------------------------------------
 # GET IDPP INTERPOLATED IMAGES 
 # -----------------------------------------------------------------------------
 

@@ -5,7 +5,8 @@
 from ase.db import connect
 from arkimede.workflow.reaction_workflow import run_ase_calculations_mechanism
 from arkimede.workflow.utilities import get_atoms_list_from_db
-from arkimede.ocp.ocp_utils import OCPCalculatorCounter, get_checkpoint_path
+from arkimede.ocp.ocp_utils import get_checkpoint_path
+from arkimede.ocp.ocp_calc import OCPCalculatorCounter
 
 # -----------------------------------------------------------------------------
 # MAIN
