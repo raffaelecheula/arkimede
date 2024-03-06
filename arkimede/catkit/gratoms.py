@@ -4,6 +4,7 @@ import ase
 import copy
 import warnings
 from builtins import super
+from networkx.convert_matrix import from_numpy_matrix
 
 sym = np.array(ase.data.chemical_symbols)
 em = nx.algorithms.isomorphism.numerical_edge_match("bonds", 1)
@@ -75,6 +76,10 @@ class Gratoms(ase.Atoms):
     def graph(self):
         return self._graph
 
+    @graph.setter
+    def graph(self, graph):
+        self._graph = graph
+
     @property
     def nodes(self):
         return self._graph.nodes
@@ -97,6 +102,14 @@ class Gratoms(ase.Atoms):
         connectivity = nx.to_numpy_matrix(self._graph)
         connectivity = np.array(connectivity, dtype=int)
         return connectivity
+
+    @connectivity.setter
+    def connectivity(self, connectivity):
+        self.graph = from_numpy_matrix(
+            A=connectivity,
+            create_using=nx.MultiGraph,
+            parallel_edges=True,
+        )
 
     def get_surface_atoms(self):
         """Return surface atoms."""

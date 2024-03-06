@@ -321,7 +321,10 @@ class SlabGenerator(object):
         ibasis.wrap()
 
         exbasis = ibasis * (1, 1, 2)
-        connectivity = utils.get_voronoi_neighbors(exbasis)
+        connectivity = utils.get_connectivity_voronoi(
+            atoms=exbasis,
+            voronoi_4d=False,
+        )
 
         n = len(ibasis)
         diff = connectivity[:n, n:].sum(axis=1)
@@ -505,7 +508,10 @@ class SlabGenerator(object):
 
             # Look into making bulk more orthogonal
             exsupercell.wrap()
-            connectivity = utils.get_voronoi_neighbors(exsupercell)
+            connectivity = utils.get_connectivity_voronoi(
+                atoms=exsupercell, 
+                voronoi_4d=False,
+            )
             edges = utils.connectivity_to_edges(connectivity[:n, :n])
             supercell.graph.add_weighted_edges_from(edges, weight="bonds")
 

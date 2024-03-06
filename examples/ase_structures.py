@@ -5,7 +5,6 @@
 import numpy as np
 from ase.formula import Formula
 from ase.constraints import FixAtoms
-from ase.data import atomic_numbers, covalent_radii
 from arkimede.catkit.build import bulk, surface, molecule
 from arkimede.catkit.utils.connectivity import get_connectivity
 
@@ -158,7 +157,7 @@ def get_atoms_slab(
     atoms_bulk.info["name"] = "-".join([bulk_structure, element_bulk])
 
     atoms_slab = surface(
-        elements=atoms_bulk,
+        bulk=atoms_bulk,
         size=(1, 1, layers),
         miller=miller,
         termination=0,
@@ -222,16 +221,9 @@ def get_atoms_slab(
         element_dopant = element_bulk[:]
         number_dopant = 0
 
-    cutoff_dict = {}
-    if number_dopant > 0:
-        cutoff_dict = {
-            element_dopant: covalent_radii[atomic_numbers[element_bulk]],
-        }
-
     get_connectivity(
         atoms=atoms_slab,
         method="cutoff",
-        cutoff_dict=cutoff_dict,
         add_cov_radii=0.2,
         attach_graph=True,
     )
@@ -265,7 +257,6 @@ def get_atoms_slab(
         "number_dopant": number_dopant,
         "repetitions": repetitions,
         "lattice_const": lattice_const,
-        "cutoff_dict": cutoff_dict,
     }
 
     return atoms_slab

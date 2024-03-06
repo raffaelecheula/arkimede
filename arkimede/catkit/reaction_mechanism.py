@@ -22,7 +22,7 @@ class AdsorptionSites:
         surface_atoms=None,
         tol=1e-5,
         cutoff=5.0,
-        centre_mult=(0.937, 0.895), #(1.000, 1.000)
+        centre_mult=(0.937, 0.895),
     ):
         """Create an extended unit cell of the surface sites for
         use in identifying other sites.

@@ -54,7 +54,7 @@ def main():
     miller_index_list = [
         "100",
         #"110",
-        "111",
+        #"111",
         
         #"311c",
         #"110c",
@@ -101,11 +101,11 @@ def main():
 
     # Reactions names.
     reaction_list = [
-        "CO2**→CO*+O*",
-        "H2O*→OH*+H*",
-        "OH*→O*+H*",
-        "t-COOH**→CO2**+H*",
-        "c-COOH**→CO*+OH*",
+        #"CO2**→CO*+O*",
+        #"H2O*→OH*+H*",
+        #"OH*→O*+H*",
+        #"t-COOH**→CO2**+H*",
+        #"c-COOH**→CO*+OH*",
         
         #"c-COOH**→COH*+O*",
         #"HCOO**→CO2**+H*",
