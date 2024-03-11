@@ -1,3 +1,9 @@
+# Custom
+*.db
+checkpoints/*
+examples/calculations*
+examples/fine-tuning*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -5,12 +11,6 @@ __pycache__/
 
 # C extensions
 *.so
-
-# Custom
-*.db
-checkpoints/*
-examples/calculations*
-examples/fine-tuning*
 
 # Distribution / packaging
 .Python

@@ -1,6 +1,6 @@
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # IMPORTS
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 import os
 from arkimede.ocp.ocp_utils import (
@@ -10,9 +10,9 @@ from arkimede.ocp.ocp_utils import (
     update_config_yaml,
 )
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # MAIN
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 def main():
     
@@ -26,8 +26,8 @@ def main():
     # Split the model into databases.
     train_test_val_split(
         db_ase_name=db_dft_name,
-        fractions=(0.8, 0.1, 0.1),
-        filenames=("train.db", "test.db", "val.db"),
+        fractions=(0.8, 0.2),
+        filenames=("train.db", "val.db"),
         directory=directory,
         seed=42,
     )
@@ -37,9 +37,8 @@ def main():
     output = f"{directory}/{identifier}.txt"
     
     # OCPmodels checkpoint path.
-    checkpoint_key = 'GemNet-OC OC20+OC22' # 'EquiformerV2 (31M) All+MD'
+    checkpoint_key = 'GemNet-OC OC20+OC22 v2'
     checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
-    
     
     delete_keys = [
         'slurm',
@@ -51,8 +50,6 @@ def main():
         'test_dataset',
         'val_dataset',
         'optim.loss_force',
-        #'optim.scheduler',
-        #'optim.scheduler_params',
     ]
     
     update_keys = {
@@ -71,7 +68,7 @@ def main():
         'dataset.val.a2g_args.r_forces': True,
         'task.primary_metric': "forces_mae",
         'logger': 'wandb',
-        'optim.early_stopping_lr': 1e-8,
+        #'optim.early_stopping_lr': 1e-8,
     }
     
     update_config_yaml(
@@ -97,9 +94,9 @@ def main():
         command += f" > {output} 2>&1"
     os.system(command)
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # IF NAME MAIN
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
 
@@ -109,6 +106,6 @@ if __name__ == "__main__":
     time_stop = timeit.default_timer()
     print("Execution time = {0:6.3} s".format(time_stop - time_start))
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # END
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------

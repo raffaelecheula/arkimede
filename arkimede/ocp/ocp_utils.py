@@ -1,36 +1,36 @@
-###############################################################################
+#######################################################################################
 # This is adapted from ocp/tutorial.
-###############################################################################
+#######################################################################################
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # IMPORTS
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 import os
 import numpy as np
 from pathlib import Path
 from arkimede.utils import checkpoints_basedir
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # OCP ROOT
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 def ocp_root():
     """Return the root directory of the installed ocp package."""
     import ocpmodels
     return Path(ocpmodels.__file__).parent.parent
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # OCP MAIN
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 def ocp_main():
     """Return the path to ocp main.py"""
     return ocp_root() / "main.py"
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # DESCRIBE OCP
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 def describe_ocp():
     """Print some system information that could be useful in debugging."""
@@ -78,9 +78,9 @@ def describe_ocp():
     print(f'  Swap memory: {psutil.swap_memory()}')
     print(f'  Disk usage: {psutil.disk_usage("/")}')
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # GET CHECKPOINTS KEYS
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 def get_checkpoints_keys():
 
@@ -126,17 +126,16 @@ def get_checkpoints_keys():
         'GemNet-dT OC22': f'{ba}/2022_09/oc22/s2ef/gndt_oc22_all_s2ef.pt',
         'GemNet-OC OC22': f'{ba}/2022_09/oc22/s2ef/gnoc_oc22_all_s2ef.pt',
         'GemNet-OC OC20+OC22': f'{ba}/2022_09/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt',
-        'GemNet-OC trained with `enforce_max_neighbors_strictly=False` #467 OC20+OC22':(
-            f'{ba}/2023_05/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt'
-        ),
-        'GemNet-OC OC20->OC22': f'{ba}/2022_09/oc22/s2ef/gnoc_finetune_all_s2ef.pt'
+        'GemNet-OC OC20+OC22 v2': f'{ba}/2023_05/oc22/s2ef/gnoc_oc22_oc20_all_s2ef.pt',
+        'GemNet-OC OC20->OC22': f'{ba}/2022_09/oc22/s2ef/gnoc_finetune_all_s2ef.pt',
+        'EquiformerV2 OC22': f'{ba}/2023_10/oc22/s2ef/eq2_121M_e4_f100_oc22_s2ef.pt',
     }
     
     return checkpoints_keys
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # LIST CHECKPOINTS
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 def list_checkpoints():
     """List checkpoints that are available to download."""
@@ -148,9 +147,9 @@ def list_checkpoints():
     for key in checkpoints_keys:
         print(key)
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # GET CHECKPOINT
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
         
 def get_checkpoint_path(checkpoint_key, basedir=checkpoints_basedir()):
     """Download a checkpoint.
@@ -182,9 +181,9 @@ def get_checkpoint_path(checkpoint_key, basedir=checkpoints_basedir()):
     
     return checkpoint_path      
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # TRAIN TEST VAL SPLIT
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 def train_test_val_split(
     db_ase_name,
@@ -240,9 +239,9 @@ def train_test_val_split(
             db_new.write(row.toatoms())
         num += n_data_array[ii]
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # UPDATE CONFIG YAML
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 def update_config_yaml(
     checkpoint_path,
@@ -292,6 +291,64 @@ def update_config_yaml(
     with open(config_yaml, 'w') as fileobj:
         yaml.dump(config_dict, fileobj)
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
+# REF ENERGY ADS DICT
+# -------------------------------------------------------------------------------------
+
+def ref_energy_ads_dict():
+    """Return a dictionary of the reference energies of adsorbate atoms.
+    For adsorption energy ocp models."""
+    return {
+        "H": -3.477,
+        "O": -7.204,
+        "C": -7.282,
+        "N": -8.083,
+    }
+
+# -------------------------------------------------------------------------------------
+# REF ENERGY TOT ARRAY
+# -------------------------------------------------------------------------------------
+
+def ref_energy_tot_array():
+    """Return an array with the reference energies for all atomic species.
+    For total energy ocp models."""
+    filename = f"{ocp_root()}/configs/oc22/linref/oc22_linfit_coeffs.npz"
+    return np.array(np.load(filename)["coeff"])
+
+# -------------------------------------------------------------------------------------
+# REF FORM ENERGY ADS
+# -------------------------------------------------------------------------------------
+
+def get_form_energy_ads(
+    atoms,
+    energy_slab,
+    indices_ads,
+    ref_energy_dict=ref_energy_ads_dict(),
+    energy=None,
+):
+    """Get the formation energy of an Atoms object for adsorption energy ocp models."""
+    if energy is None:
+        energy = atoms.get_potential_energy()
+    ref_energy = energy_slab+0.
+    for aa in atoms[indices_ads]:
+        ref_energy += ref_energy_dict[aa.symbol]
+    return energy-ref_energy
+
+# -------------------------------------------------------------------------------------
+# GET FORM ENERGY TOT
+# -------------------------------------------------------------------------------------
+
+def get_form_energy_tot(
+    atoms,
+    energy=None,
+    ref_energy_array=ref_energy_tot_array(),
+):
+    """Get the formation energy of an Atoms object for total energy ocp models."""
+    if energy is None:
+        energy = atoms.get_potential_energy()
+    ref_energy = ref_energy_array[atoms.get_atomic_numbers()].sum()
+    return energy-ref_energy
+
+# -------------------------------------------------------------------------------------
 # END
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
