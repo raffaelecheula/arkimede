@@ -5,8 +5,8 @@
 import numpy as np
 from ase.formula import Formula
 from ase.constraints import FixAtoms
-from ase.data import atomic_numbers, covalent_radii
 from arkimede.catkit.build import bulk, surface, molecule
+from arkimede.catkit.surface import cut_surface, reorder_surface
 from arkimede.catkit.utils.connectivity import get_connectivity
 
 # -----------------------------------------------------------------------------
@@ -42,8 +42,11 @@ repetitions_dict = {
     "311": (3, 2),
     "321": (2, 1),
     "331": (3, 1),
-    "110c": (3, 1),
-    "311c": (3, 1),
+    "511": (3, 1),
+    "100-110": (3, 1),
+    "100-111": (3, 1),
+    "110-111": (3, 1),
+    "111-111": (3, 1),
 }
 
 # -----------------------------------------------------------------------------
@@ -136,19 +139,37 @@ def get_atoms_slab(
         fixed = 3
         orthogonal = True
 
-    elif miller_index == "311c":
+    elif miller_index == "511":
+        layers = 9
+        miller = (5, 1, 1)
+        fixed = 3
+        orthogonal = True
+
+    elif miller_index == "100-110":
+        layers = 9
+        miller = (2, 1, 0)
+        fixed = 3
+        orthogonal = True
+
+    elif miller_index == "100-111":
         layers = 7
         miller = (1, 3, 1)
         fixed = 4
         orthogonal = True
 
-    elif miller_index == "110c":
+    elif miller_index == "110-111":
+        layers = 9
+        miller = (3, 3, 1)
+        fixed = 3
+        orthogonal = True
+
+    elif miller_index == "111-111":
         layers = 7
         miller = (1, 1, 0)
         fixed = 3
         orthogonal = True
 
-    a_init = 5.0
+    a_init = 1.0
     atoms_bulk = bulk(
         name="X",
         a=a_init,
@@ -158,7 +179,7 @@ def get_atoms_slab(
     atoms_bulk.info["name"] = "-".join([bulk_structure, element_bulk])
 
     atoms_slab = surface(
-        elements=atoms_bulk,
+        bulk=atoms_bulk,
         size=(1, 1, layers),
         miller=miller,
         termination=0,
@@ -169,42 +190,47 @@ def get_atoms_slab(
         delta_ncoord=delta_ncoord,
     )
 
-    if miller_index == "311c":
-        cell = atoms_slab.cell.copy()
-        atoms_slab *= (3, 2, 1)
-        atoms_slab.translate([-atoms_slab.cell[0, 0] / 2, 0.0, 0.0])
-        atoms_slab.cell[0, 0] = cell[0, 0]
-        atoms_slab.cell[1, 0] = 0.0
-        del atoms_slab[
-            [
-                a.index
-                for a in atoms_slab
-                if a.position[0] < -1e-3
-                or a.position[0] > -1e-3 + atoms_slab.cell[0, 0]
-            ]
-        ]
-        args = np.argsort(atoms_slab.positions[:, 1])
-        atoms_slab = atoms_slab[args]
-        args = np.argsort(atoms_slab.positions[:, 2])
-        atoms_slab = atoms_slab[args]
+    if miller_index == "100-110":
+        atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [-1, 2]])
+        atoms_slab = reorder_surface(atoms_slab)
+        del atoms_slab[[1, 16]]
+        atoms_slab.set_constraint(FixAtoms(indices=[0, 1, 2, 3, 4, 6]))
+        top = [12, 13, 14, 15]
+        bottom = [0, 1, 2, 4]
+        if delta_ncoord == 0:
+            top += [9, 11]
+            bottom += [3, 6]
+        atoms_slab.set_surface_atoms(top=top, bottom=bottom)
+
+    elif miller_index == "100-111":
+        atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [-1, 2]])
+        atoms_slab = reorder_surface(atoms_slab)
         del atoms_slab[[1, 12]]
-        indices = [0, 1, 2, 4]
-        atoms_slab.set_constraint(FixAtoms(indices=indices))
+        atoms_slab.set_constraint(FixAtoms(indices=[0, 1, 2, 4]))
         atoms_slab.set_surface_atoms(top=[7, 9, 10, 11], bottom=[0, 1, 2, 4])
 
-    elif miller_index == "110c":
-        atoms_slab *= (1, 2, 1)
-        args = np.argsort(atoms_slab.positions[:, 2])
-        atoms_slab = atoms_slab[args]
-        del atoms_slab[[1, 12]]
-        indices = [0, 1, 2, 4]
-        atoms_slab.set_constraint(FixAtoms(indices=indices))
+    elif miller_index == "110-111":
+        atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [-1, 2]])
+        atoms_slab = reorder_surface(atoms_slab)
+        del atoms_slab[[1, 16]]
+        atoms_slab.set_constraint(FixAtoms(indices=[0, 1, 2, 3, 4, 6]))
+        top = [11, 13, 14, 15]
+        bottom = [0, 1, 2, 3]
         if delta_ncoord == 0:
-            top = [7, 9, 10, 11]
-            bottom = [0, 1, 2, 4]
-        else:
-            top = [9, 10, 11]
-            bottom = [0, 1, 2]
+            top += [10, 12]
+            bottom += [4, 6]
+        atoms_slab.set_surface_atoms(top=top, bottom=bottom)
+
+    elif miller_index == "111-111":
+        atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [0, 2]])
+        atoms_slab = reorder_surface(atoms_slab)
+        del atoms_slab[[1, 12]]
+        atoms_slab.set_constraint(FixAtoms(indices=[0, 1, 2, 4]))
+        top = [9, 10, 11]
+        bottom = [0, 1, 2]
+        if delta_ncoord == 0:
+            top += [7]
+            bottom += [4]
         atoms_slab.set_surface_atoms(top=top, bottom=bottom)
 
     atoms_slab.set_cell(atoms_slab.cell * lattice_const / a_init, scale_atoms=True)
@@ -222,16 +248,9 @@ def get_atoms_slab(
         element_dopant = element_bulk[:]
         number_dopant = 0
 
-    cutoff_dict = {}
-    if number_dopant > 0:
-        cutoff_dict = {
-            element_dopant: covalent_radii[atomic_numbers[element_bulk]],
-        }
-
     get_connectivity(
         atoms=atoms_slab,
         method="cutoff",
-        cutoff_dict=cutoff_dict,
         add_cov_radii=0.2,
         attach_graph=True,
     )
@@ -239,9 +258,9 @@ def get_atoms_slab(
     surf_indices = [a.index for a in atoms_slab if a.tag == 1]
     surf_indices.reverse()
 
-    for i in range(number_dopant):
-        j = surf_indices[i]
-        atoms_slab[j].symbol = element_dopant
+    for ii in range(number_dopant):
+        jj = surf_indices[ii]
+        atoms_slab[jj].symbol = element_dopant
 
     magmoms = [1.0 if a.symbol in magnetic_elements else 0.0 for a in atoms_slab]
     atoms_slab.set_initial_magnetic_moments(magmoms=magmoms)
@@ -265,7 +284,6 @@ def get_atoms_slab(
         "number_dopant": number_dopant,
         "repetitions": repetitions,
         "lattice_const": lattice_const,
-        "cutoff_dict": cutoff_dict,
     }
 
     return atoms_slab

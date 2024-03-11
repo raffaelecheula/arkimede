@@ -33,7 +33,7 @@ def main():
     # Show initial structures.
     show_sites = False
     show_gas_init = False
-    show_clean_init = False
+    show_clean_init = True
     show_ads_init = False
     show_neb_init = False
 
@@ -53,31 +53,33 @@ def main():
     ]
     miller_index_list = [
         "100",
-        #"110",
+        "110",
         "111",
-        
-        #"311c",
-        #"110c",
-        #"210",
-        #"211",
-        #"221",
+        "210",
+        "211",
+        "221",
         #"310",
         #"320",
         #"311",
         #"321",
         #"331",
+        #"511",
+        #"100-110",
+        #"100-111",
+        #"110-111",
+        #"111-111",
     ]
 
     # Adsorbates names.
     adsorbate_list = [
-        "CO2**",
-        "H2O*",
-        "CO*",
-        "H*",
-        "OH*",
-        "O*",
-        "c-COOH**",
-        "t-COOH**",
+        #"CO2**",
+        #"H2O*",
+        #"CO*",
+        #"H*",
+        #"OH*",
+        #"O*",
+        #"c-COOH**",
+        #"t-COOH**",
         
         #"CO2*",
         #"c-COOH*",
@@ -101,11 +103,11 @@ def main():
 
     # Reactions names.
     reaction_list = [
-        "CO2**→CO*+O*",
-        "H2O*→OH*+H*",
-        "OH*→O*+H*",
-        "t-COOH**→CO2**+H*",
-        "c-COOH**→CO*+OH*",
+        #"CO2**→CO*+O*",
+        #"H2O*→OH*+H*",
+        #"OH*→O*+H*",
+        #"t-COOH**→CO2**+H*",
+        #"c-COOH**→CO*+OH*",
         
         #"c-COOH**→COH*+O*",
         #"HCOO**→CO2**+H*",

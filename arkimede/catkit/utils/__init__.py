@@ -1,6 +1,10 @@
 from .connectivity import (
-    get_voronoi_neighbors,
-    get_cutoff_neighbors,
+    get_connectivity_voronoi,
+    get_connectivity_cutoff,
+    get_connectivity_cutoff_ase,
+    get_connectivity_pymatgen,
+    get_connectivity,
+    plot_connectivity,
 )
 from .coordinates import (
     trilaterate,
@@ -30,8 +34,12 @@ from .utilities import (
 )
 
 __all__ = [
-    "get_voronoi_neighbors",
-    "get_cutoff_neighbors",
+    "get_connectivity_voronoi",
+    "get_connectivity_cutoff",
+    "get_connectivity_cutoff_ase",
+    "get_connectivity_pymatgen",
+    "get_connectivity",
+    "plot_connectivity",
     "get_integer_enumeration",
     "trilaterate",
     "get_unique_xy",

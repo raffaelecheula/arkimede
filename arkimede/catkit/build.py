@@ -5,15 +5,17 @@ from .surface import SlabGenerator
 from .molecules import get_topologies, get_3D_positions
 
 
-def bulk(name, crystalstructure=None, primitive=False, **kwargs):
+def bulk(name=None, atoms=None, crystalstructure=None, primitive=False, **kwargs):
     """Return the standard conventional cell of a bulk structure
     created using ASE. Accepts all keyword arguments for the ase
     bulk generator.
 
     Parameters
     ----------
-    name : Atoms object | str
+    name : str
         Chemical symbol or symbols as in 'MgO' or 'NaCl'.
+    atoms : Atoms object
+        ase.Atoms object of the bulk structure.
     crystalstructure : str
         Must be one of sc, fcc, bcc, hcp, diamond, zincblende,
         rocksalt, cesiumchloride, fluorite or wurtzite.
@@ -26,19 +28,13 @@ def bulk(name, crystalstructure=None, primitive=False, **kwargs):
     standardized_bulk : Gratoms object
         The conventional standard or primitive bulk structure.
     """
-    if isinstance(name, str):
+    if atoms is None:
         atoms = ase.build.bulk(name, crystalstructure, **kwargs)
-    else:
-        atoms = name
-    standardized_bulk = get_standardized_cell(
-        atoms, primitive=primitive
-    )
-
-    return standardized_bulk
+    return get_standardized_cell(atoms, primitive=primitive)
 
 
 def surface(
-    elements,
+    bulk,
     size,
     miller=(1, 1, 1),
     termination=0,
@@ -46,7 +42,11 @@ def surface(
     vacuum=5.0,
     orthogonal=False,
     delta_ncoord=0,
-    **kwargs
+    layer_type="trim",
+    attach_graph=True,
+    standardize_bulk=True,
+    tol=1e-8,
+    **kwargs,
 ):
     """A helper function to return the surface associated with a
     given set of input parameters to the general surface generator.
@@ -75,27 +75,17 @@ def surface(
     slab : Gratoms object
         Return a slab generated from the specified bulk structure.
     """
-    if isinstance(elements, ase.Atoms):
-        atoms = elements
-    else:
-        bkwargs = kwargs.copy()
-        keys = ["crystalstructure", "a", "c", "covera", "u", "orthorhombic", "cubic"]
-        for key in kwargs:
-            if key not in keys:
-                del bkwargs[key]
-        atoms = ase.build.bulk(elements, **bkwargs)
-
     generator = SlabGenerator(
-        bulk=atoms,
+        bulk=bulk,
         miller_index=miller,
         layers=size[-1],
         vacuum=vacuum,
         fixed=fixed,
         delta_ncoord=delta_ncoord,
-        layer_type=kwargs.get("layer_type", "trim"),
-        attach_graph=kwargs.get("attach_graph", True),
-        standardize_bulk=kwargs.get("standardize_bulk", True),
-        tol=kwargs.get("tol", 1e-8),
+        layer_type=layer_type,
+        attach_graph=attach_graph,
+        standardize_bulk=standardize_bulk,
+        tol=tol,
     )
 
     if len(size) == 2:
