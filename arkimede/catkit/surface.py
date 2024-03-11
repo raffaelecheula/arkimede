@@ -602,6 +602,90 @@ def transform_ab(slab, matrix, tol=1e-5):
 
     return slab
 
+def cut_surface(
+    atoms,
+    vectors=[[1, 0], [0, 1]],
+    origin=(0., 0.),
+    tol=1e-5,
+):
+    """Cut a surface structure with surface vectors.
+
+    Args:
+        atoms ase.Atoms: Structure to cut.
+        vectors (list, optional): Surface vectors used to cut the surface.
+        Defaults to [[1, 0], [0, 1]].
+        origin (tuple, optional): Origin of the cut. Defaults to (0., 0.).
+        tol (float, optional): Tolerance use to avoid errors due to float precision. 
+        Defaults to 1e-5.
+
+    Returns:
+        ase.Atoms: Structure cut.
+    """
+
+    # Wrap atoms into cell.
+    atoms.wrap()
+    
+    # Transform vectors into arrays.
+    vectors = np.array(vectors)
+    if vectors[0,0] < 0 or vectors[1,1] < 0:
+        raise RuntimeError("vectors[0,0] and vectors[1,1] must be > 0.")
+
+    # Calculate the number of repetitions and the translation necessary.
+    repeat = [vectors[0,0]+2, vectors[1,1]+2, 1]
+    translate = [-1, -1]
+    if vectors[0,1] >= 0:
+        repeat[1] += vectors[0,1]
+    else:
+        repeat[1] -= vectors[0,1]
+        translate[1] += vectors[0,1]
+    if vectors[1,0] >= 0:
+        repeat[0] += vectors[1,0]
+    else:
+        repeat[0] -= vectors[1,0]
+        translate[0] += vectors[1,0]
+
+    # Calculate the new cell.
+    cell_2d = atoms.cell[:2,:2]
+    cell_new = atoms.cell.copy()
+    cell_new[:2,:2] = np.dot(vectors, cell_2d)
+    
+    # Translate and repeat the atoms.
+    atoms.translate([*np.dot(translate, cell_2d), 0.])
+    atoms *= repeat
+    atoms.set_cell(cell_new)
+    
+    # Delete atoms outside the cell.
+    scaled = atoms.get_scaled_positions(wrap=False) + tol
+    del atoms[
+        [ii for ii, pos in enumerate(scaled) if (pos < 0).any() or (pos > 1).any()]
+    ]
+    
+    return atoms
+
+
+def reorder_surface(atoms, tol=1e-5):
+    """Reorder the atoms."""
+    
+    # Wrap atoms into cell.
+    atoms.wrap(eps=tol)
+    
+    # Calculate layers and sort the atoms.
+    order = np.zeros([len(atoms), 3], dtype=int)
+    for axis in [0, 1, 2]:
+        scaled = atoms.get_scaled_positions(wrap=False)[:, axis]
+        values = [scaled[0]]
+        for pos in scaled[1:]:
+            if not np.isclose(pos, values, atol=tol, rtol=tol).any():
+                values += [pos]
+        values = np.sort(values)
+        for ii, pos in enumerate(scaled):
+            close = np.isclose(pos, values[::-1], atol=tol, rtol=tol)
+            order[ii, axis] = np.where(close)[0][0]
+    dummy = -(order[:,2]*1e12+order[:,1]*1e6+order[:,0])
+    atoms = atoms[np.argsort(dummy)]
+    
+    return atoms
+
 
 def convert_miller_index(miller_index, atoms1, atoms2):
     """Return a converted miller index between two atoms objects."""
