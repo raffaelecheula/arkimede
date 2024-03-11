@@ -623,7 +623,7 @@ def cut_surface(
     """
 
     # Wrap atoms into cell.
-    atoms.wrap()
+    atoms.wrap(eps=tol)
     
     # Transform vectors into arrays.
     vectors = np.array(vectors)
@@ -664,7 +664,7 @@ def cut_surface(
 
 
 def reorder_surface(atoms, tol=1e-5):
-    """Reorder the atoms."""
+    """Reorder the atoms of a surface according to the positions."""
     
     # Wrap atoms into cell.
     atoms.wrap(eps=tol)

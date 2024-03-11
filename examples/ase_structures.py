@@ -43,6 +43,7 @@ repetitions_dict = {
     "321": (2, 1),
     "331": (3, 1),
     "511": (3, 1),
+    "100-100": (2, 2),
     "100-110": (3, 1),
     "100-111": (3, 1),
     "110-111": (3, 1),
@@ -145,6 +146,12 @@ def get_atoms_slab(
         fixed = 3
         orthogonal = True
 
+    elif miller_index == "100-100":
+        layers = 7
+        miller = (1, 1, 0)
+        fixed = 3
+        orthogonal = True
+
     elif miller_index == "100-110":
         layers = 9
         miller = (2, 1, 0)
@@ -189,6 +196,16 @@ def get_atoms_slab(
         attach_graph=True,
         delta_ncoord=delta_ncoord,
     )
+
+    if miller_index == "100-100":
+        atoms_slab = cut_surface(atoms_slab, vectors=[[2, 0], [0, 1]])
+        atoms_slab = reorder_surface(atoms_slab)
+        del atoms_slab[[1, 12]]
+        atoms_slab.set_constraint(FixAtoms(indices=[0, 1, 2, 4]))
+        top = [7, 9, 10, 11]
+        bottom = [0, 1, 2, 4]
+        atoms_slab.set_surface_atoms(top=top, bottom=bottom)
+        atoms_slab.edit()
 
     if miller_index == "100-110":
         atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [-1, 2]])
