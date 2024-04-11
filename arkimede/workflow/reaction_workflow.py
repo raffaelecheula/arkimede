@@ -232,7 +232,11 @@ def run_ase_calculations_mechanism(
                     atoms.info["modified"] = True
             # Calculate vibrations.
             if atoms.info["converged"] and "vib_energies" not in atoms.info:
-                run_vibrations_calculation(atoms=atoms, calc=calc)
+                run_vibrations_calculation(
+                    atoms=atoms,
+                    calc=calc,
+                    remove_vib_dir=True,
+                )
             write_atoms_to_db(atoms=atoms, db_ase=db_ase)
         
         print_results_calculation(atoms=atoms)
@@ -359,7 +363,11 @@ def run_ase_calculations_mechanism(
         # If the TS is found, calculate vibrations.
         if atoms_TS.info["converged"] and atoms_TS.info["modified"] is False:
             if "vib_energies" not in atoms_TS.info:
-                run_vibrations_calculation(atoms=atoms_TS, calc=calc)
+                run_vibrations_calculation(
+                    atoms=atoms_TS,
+                    calc=calc,
+                    remove_vib_dir=True,
+                )
                 write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
 
 # -------------------------------------------------------------------------------------

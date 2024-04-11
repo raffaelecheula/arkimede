@@ -263,7 +263,7 @@ def run_dimer_calculation(
     )
     
     # Observer that reset the eigenmode to the direction of the ts bonds.
-    # TODO: Maybe there is a better way of doind this (e.g., selecting the 
+    # Maybe there is a better way of doind this (e.g., selecting the 
     # eigenmode most similar to the directions of the ts bonds).
     if bonds_TS and reset_eigenmode:
         def reset_eigenmode_obs(atoms_dimer = atoms_dimer):
@@ -619,9 +619,20 @@ def run_TS_search_calculation(
 # RUN VIBRATIONS CALCULATION
 # -------------------------------------------------------------------------------------
 
-def run_vibrations_calculation(atoms, calc, indices="not_surface"):
+def run_vibrations_calculation(
+    atoms,
+    calc,
+    indices="not_surface",
+    name="vib",
+    delta=0.01,
+    nfree=2,
+    properties=["energy", "forces"],
+    remove_cache=False,
+    write_trajs=False,
+):
     """Run a vibrations calculation."""
     from ase.vibrations import Vibrations
+    from ase.io import Trajectory
     
     # Get indices of atoms to vibrate.
     if indices == "not_surface":
@@ -632,13 +643,44 @@ def run_vibrations_calculation(atoms, calc, indices="not_surface"):
     # Initialize the vibrations calculation.
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
-    vib = Vibrations(atoms=atoms_copy, indices=indices, delta=0.01, nfree=2)
+    
+    class VibrationsWithEnergy(Vibrations):
+        def calculate(self, atoms, disp):
+            self.calc.calculate(
+                atoms=atoms,
+                properties=properties,
+                system_changes=["positions"],
+            )
+            if self.ir:
+                self.calc.get_dipole_moment(atoms)
+            return self.calc.results
+    
+    vib = VibrationsWithEnergy(
+        atoms=atoms_copy,
+        indices=indices,
+        name=name,
+        delta=delta,
+        nfree=nfree,
+    )
     
     # Run the calculation and get normal frequencies.
+    vib.clean(empty_files=True)
     vib.run()
     vib_energies = vib.get_energies()
-    vib.clean()
-    os.rmdir("vib")
+    
+    # Write Trajectory files for each displacement.
+    if write_trajs is True:
+        os.makedirs("vib_trajs", exist_ok=True)
+        for disp, atoms in vib.iterdisplace(inplace=True):
+            filename = os.path.join("vib_trajs", "atoms-"+disp.name+".traj")
+            atoms.calc = SinglePointCalculator(atoms=atoms, **vib.cache[disp.name])
+            traj = Trajectory(filename, mode='w', atoms=atoms, properties=properties)
+            traj.write()
+    
+    # Remove the cache directory with the results of the calculation.
+    if remove_cache is True:
+        vib.clean()
+        os.rmdir(name)
 
     atoms.info["vib_energies"] = vib_energies
 

@@ -27,10 +27,10 @@ class OCPCalculatorCounter(OCPCalculator):
             max_neighbors=max_neighbors,
             cpu=cpu,
         )
-        self.n_singlepoints = 0
+        self.counter = 0
     
     def calculate(self, atoms, properties, system_changes):
-        self.n_singlepoints += 1
+        self.counter += 1
         super().calculate(atoms, properties, system_changes)
 
 # -------------------------------------------------------------------------------------
