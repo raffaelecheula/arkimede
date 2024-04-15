@@ -6,7 +6,7 @@ import os
 from arkimede.ocp.ocp_utils import (
     ocp_main,
     get_checkpoint_path,
-    train_test_val_split,
+    split_database,
     update_config_yaml,
 )
 
@@ -23,22 +23,23 @@ def main():
     directory = "fine-tuning"
     identifier = "fine-tuning"
     
-    # Split the model into databases.
-    train_test_val_split(
-        db_ase_name=db_dft_name,
-        fractions=(0.8, 0.2),
-        filenames=("train.db", "val.db"),
-        directory=directory,
-        seed=42,
-    )
+    # OCPmodels checkpoint path.
+    checkpoint_key = 'GemNet-OC OC20+OC22 v2'
+    checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
     
     # New yaml config and output files.
     config_yaml = f"{directory}/config.yml"
     output = f"{directory}/{identifier}.txt"
     
-    # OCPmodels checkpoint path.
-    checkpoint_key = 'GemNet-OC OC20+OC22 v2'
-    checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
+    # Split the database into train, test (optional), and val databases.
+    split_database(
+        db_ase_name=db_dft_name,
+        fractions=(0.8, 0.2),
+        filenames=("train.db", "val.db"),
+        directory=directory,
+        seed=42,
+        change_energy_ref_fun=None,
+    )
     
     delete_keys = [
         'slurm',

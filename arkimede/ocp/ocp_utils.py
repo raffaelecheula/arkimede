@@ -182,11 +182,12 @@ def get_checkpoint_path(checkpoint_key, basedir=checkpoints_basedir()):
     return checkpoint_path      
 
 # -------------------------------------------------------------------------------------
-# TRAIN TEST VAL SPLIT
+# SPLIT DATABASE
 # -------------------------------------------------------------------------------------
 
-def train_test_val_split(
+def split_database(
     db_ase_name,
+    change_energy_ref_fun=None,
     fractions=(0.8, 0.1, 0.1),
     filenames=('train.db', 'test.db', 'val.db'),
     directory='.',
@@ -195,6 +196,7 @@ def train_test_val_split(
     """Split an ase db into train, test and validation dbs.
     
     db_ase_name: path to an ase db containing all the data.
+    change_energy_ref_fun: function to change the reference energy for OCP models.
     fractions: a tuple containing the fraction of train, test and val data. 
         This will be normalized.
     filenames: a tuple of filenames to write the splits into.
@@ -236,7 +238,11 @@ def train_test_val_split(
         db_new = connect(db_name)
         for id in ids[num:num+n_data_array[ii]]:
             row = db_ase.get(id=int(id))
-            db_new.write(row.toatoms())
+            atoms = row.toatoms()
+            if change_energy_ref_fun is not None:
+                energy = change_energy_ref_fun(atoms=atoms)
+                atoms.calc.results["energy"] = energy
+            db_new.write(atoms)
         num += n_data_array[ii]
 
 # -------------------------------------------------------------------------------------

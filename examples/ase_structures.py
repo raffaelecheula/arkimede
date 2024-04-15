@@ -292,6 +292,7 @@ def get_atoms_slab(
 
     atoms_slab.info = {
         "name": name,
+        "name_clean": name,
         "species": "clean",
         "surf_structure": surf_structure,
         "n_atoms_clean": len(atoms_slab),
