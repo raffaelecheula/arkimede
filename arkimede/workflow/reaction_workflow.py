@@ -386,6 +386,7 @@ def run_dft_calculations_k8s(
     write_input_fun,
     check_finished_fun,
     job_queued_fun,
+    command=None,
     cpu_req=8,
     cpu_lim=12,
     mem_req='8Gi',
@@ -429,6 +430,7 @@ def run_dft_calculations_k8s(
                 write_input_fun(atoms)
                 submit_k8s(
                     params_k8s=params_k8s,
+                    command=command,
                     name=atoms.info["name"],
                     dirpath=os.path.join(cwd, directory),
                     namespace=namespace,

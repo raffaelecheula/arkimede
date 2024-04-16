@@ -1,4 +1,4 @@
-# VASP submission template.
+# k8s submission template.
 
 apiVersion: batch/v1
 kind: Job
@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
         - args:
-          - mpirun -np 8 --map-by hwthread /opt/vasp.6.1.2_pgi_mkl_beef/bin/vasp_std > vasp.out 
+          - CHANGE_THIS
           name: CHANGE_THIS
           image: ulissigroup/kubeflow_vasp:amptorch
           imagePullPolicy: Always
@@ -34,7 +34,7 @@ spec:
           command:
           - /bin/bash
           - -c
-          workingDir: /home/jovyan/CHANGE_THIS
+          workingDir: CHANGE_THIS
       restartPolicy: Never
       volumes:
       - name: workspace-raffaele-main

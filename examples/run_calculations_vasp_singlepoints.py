@@ -35,7 +35,7 @@ def main():
     basedir_dft_calc = "calculations_vasp"
     
     # Name of the template yaml file and namespace for kubernetes submission.
-    template_yaml = templates_basedir() / "template_vasp_k8s.yaml"
+    template_yaml = templates_basedir() / "template_k8s.yaml"
     namespace = "raffaelecheula"
     
     # Filename and name of dft calculation.
@@ -62,6 +62,10 @@ def main():
     
     # Setup vasp calculator.
     calc = Vasp(**vasp_flags)
+    
+    # Vasp command.
+    vasp_exe = "/opt/vasp.6.1.2_pgi_mkl_beef/bin/vasp_std"
+    command = f"mpirun -np 8 --map-by hwthread {vasp_exe} > vasp.out"
     
     # ---------------------------------------------------------------------------------
     # RUN DFT CALCULATIONS
@@ -94,6 +98,7 @@ def main():
         write_input_fun=write_input_vasp,
         check_finished_fun=check_finished_vasp,
         job_queued_fun=job_queued_k8s,
+        command=command,
     )
 
 # -------------------------------------------------------------------------------------

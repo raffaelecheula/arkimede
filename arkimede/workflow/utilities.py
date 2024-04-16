@@ -115,12 +115,6 @@ def get_atoms_TS_from_images_neb(images, atoms_TS=None, index_TS=None):
         "images_energies": [atoms.get_potential_energy() for atoms in images],
     })
     
-    #vector = np.zeros((len(atoms_TS), 3))
-    #if index_TS > 0:
-    #    vector += atoms_TS.positions-images[index_TS-1].positions
-    #if index_TS < len(images)-1:
-    #    vector += images[index_TS+1].positions-atoms_TS.positions
-    #vector /= np.linalg.norm(vector)
     vector = get_vector_from_images(images, index_TS)
     atoms_TS.info["vector"] = vector
     
@@ -363,9 +357,17 @@ def check_same_connectivity(atoms_1, atoms_2):
 # GET NAMES METADATA
 # -------------------------------------------------------------------------------------
 
-def get_names_metadata(atoms_clean_tot, atoms_ads_tot, atoms_neb_tot):
+def get_names_metadata(
+    atoms_gas_tot,
+    atoms_clean_tot,
+    atoms_ads_tot,
+    atoms_neb_tot,
+):
     """Get the structures names as dictionary."""
     metadata = {
+        "gas": [
+            atoms.info["name"] for atoms in atoms_gas_tot
+        ],
         "clean": [
             atoms.info["name"] for atoms in atoms_clean_tot
         ],

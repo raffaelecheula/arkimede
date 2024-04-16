@@ -312,7 +312,7 @@ def get_atoms_slab(
 # -------------------------------------------------------------------------------------
 
 
-def get_atoms_gas(species, vacuum=10.0):
+def get_atoms_gas(species, vacuum=12.0):
 
     top_brg_combinations = [
         {'bonds': ['top', 'top'], 'over': 'brg'},
@@ -344,6 +344,15 @@ def get_atoms_gas(species, vacuum=10.0):
         sites_names = None
         symmetric_ads = False
         dissoc_dict = {}
+
+    elif species == "H2*":
+        bonds_surf = [0]
+        atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
+        sites_names = None
+        symmetric_ads = False
+        dissoc_dict = {
+            "H*+H*": {"bond_break": [0, 1], "bonds_surf": [0, 1]},
+        }
 
     elif species == "CO*":
         bonds_surf = [0]
@@ -560,11 +569,34 @@ def get_atoms_gas(species, vacuum=10.0):
         dissoc_dict = {}
 
     elif species == "HCOOH*":
+        bonds_surf = [2]
+        atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
+        sites_names = top_brg_combinations[:]
+        symmetric_ads = False
+        dissoc_dict = {
+            "HCOO**+H*": {"bond_break": [1, 4], "bonds_surf": [1, 2, 4]},
+            "c-COOH**+H*": {"bond_break": [0, 3], "bonds_surf": [0, 2, 3]},
+        }
+
+    elif species == "a-HCOOH**":
         bonds_surf = [1, 2]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
-        dissoc_dict = {}
+        dissoc_dict = {
+            "HCOO**+H*": {"bond_break": [1, 4], "bonds_surf": [1, 2, 4]},
+            "c-COOH**+H*": {"bond_break": [0, 3], "bonds_surf": [0, 2, 3]},
+        }
+
+    elif species == "b-HCOOH**":
+        bonds_surf = [0, 1]
+        atoms_gas = molecule(gas_name, bond_index=bonds_surf)[1]
+        sites_names = top_brg_combinations[:]
+        symmetric_ads = False
+        dissoc_dict = {
+            "HCOO**+H*": {"bond_break": [1, 4], "bonds_surf": [1, 2, 4]},
+            "c-COOH**+H*": {"bond_break": [0, 3], "bonds_surf": [0, 2, 3]},
+        }
 
     elif species == "COHOH*":
         bonds_surf = [0]
@@ -585,7 +617,9 @@ def get_atoms_gas(species, vacuum=10.0):
     symbols_dict = formula.count()
 
     atoms_gas.info = {
+        "name": species,
         "species": species,
+        "surf_structure": "gas",
         "bonds_surf": bonds_surf,
         "sites_names": sites_names,
         "symmetric_ads": symmetric_ads,
@@ -640,6 +674,8 @@ if __name__ == "__main__":
         "HCOH**",
         "H2COH**",
         "HCOOH*",
+        "a-HCOOH**",
+        "b-HCOOH**",
         "COHOH*",
     ]
 

@@ -33,9 +33,9 @@ def main():
     # Show initial structures.
     show_sites = False
     show_gas_init = False
-    show_clean_init = True
-    show_ads_init = False
-    show_neb_init = False
+    show_clean_init = False
+    show_ads_init = True
+    show_neb_init = True
 
     # ---------------------------------------------------------------------------------
     # REACTION MECHANISM PARAMETERS
@@ -53,11 +53,11 @@ def main():
     ]
     miller_index_list = [
         "100",
-        "110",
-        "111",
-        "210",
-        "211",
-        "221",
+        #"110",
+        #"111",
+        #"210",
+        #"211",
+        #"221",
         #"310",
         #"320",
         #"311",
@@ -73,14 +73,16 @@ def main():
 
     # Adsorbates names.
     adsorbate_list = [
-        #"CO2**",
-        #"H2O*",
-        #"CO*",
-        #"H*",
-        #"OH*",
-        #"O*",
-        #"c-COOH**",
-        #"t-COOH**",
+        "CO2**",
+        "H2O*",
+        "CO*",
+        "H*",
+        "OH*",
+        "O*",
+        "c-COOH**",
+        "t-COOH**",
+        #"H2*",
+        #"b-HCOOH**"
         
         #"CO2*",
         #"c-COOH*",
@@ -104,11 +106,14 @@ def main():
 
     # Reactions names.
     reaction_list = [
-        #"CO2**→CO*+O*",
-        #"H2O*→OH*+H*",
-        #"OH*→O*+H*",
-        #"t-COOH**→CO2**+H*",
-        #"c-COOH**→CO*+OH*",
+        "CO2**→CO*+O*",
+        "H2O*→OH*+H*",
+        "OH*→O*+H*",
+        "t-COOH**→CO2**+H*",
+        "c-COOH**→CO*+OH*",
+        #"H2*→H*+H*",
+        #"b-HCOOH**→HCOO**+H*",
+        #"b-HCOOH**→c-COOH**+H*",
         
         #"c-COOH**→COH*+O*",
         #"HCOO**→CO2**+H*",
@@ -143,9 +148,14 @@ def main():
     # Import functions to produce ase atoms structures.
     from ase_structures import get_atoms_slab, get_atoms_gas
 
+    atoms_gas_tot = []
     atoms_clean_tot = []
     atoms_ads_tot = []
     atoms_neb_tot = []
+
+    # Get the structures of gas species.
+    for species in adsorbate_list:
+        atoms_gas_tot.append(get_atoms_gas(species=species))
 
     # Get the atoms structures of clean surfaces and surfaces with adsorbates.
     for element_bulk in element_bulk_list:
@@ -188,13 +198,14 @@ def main():
     
     # Store structures names as metadata in the database.
     db_init.metadata = get_names_metadata(
+        atoms_gas_tot=atoms_gas_tot,
         atoms_clean_tot=atoms_clean_tot,
         atoms_ads_tot=atoms_ads_tot,
         atoms_neb_tot=atoms_neb_tot,
     )
     
     # Store initial structures into ade database.
-    for atoms in atoms_clean_tot+atoms_ads_tot+atoms_allnebs_tot:
+    for atoms in atoms_gas_tot+atoms_clean_tot+atoms_ads_tot+atoms_allnebs_tot:
         atoms.info["calculation"] = "initial-structure"
         atoms.info["converged"] = False
         write_atoms_to_db(atoms=atoms, db_ase=db_init)
@@ -203,6 +214,10 @@ def main():
     print(f"Number of reactions:  {len(atoms_neb_tot):.0f}")
 
     # Visualize initial structures.
+    if show_gas_init is True and len(atoms_gas_tot) > 0:
+        gui = GUI(atoms_gas_tot)
+        gui.run()
+    
     if show_clean_init is True and len(atoms_clean_tot) > 0:
         gui = GUI(atoms_clean_tot)
         gui.run()

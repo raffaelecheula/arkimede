@@ -229,20 +229,20 @@ def rotate_bidentate(atoms, bond_index):
         if bb in atoms.graph.neighbors(bond_index[1])
     ]
     if len(links) > 0:
-        a1 += sum([atoms[int(i)].position for i in links])
+        a1 += sum([atoms[int(ii)].position for ii in links])
     else:
         for bond in bond_index:
             succ = nx.dfs_successors(atoms.graph, bond)
             if bond in succ:
-                a1 += sum([atoms[int(i)].position for i in succ[bond]])
+                a1 += sum([atoms[int(ii)].position for ii in succ[bond]])
     a1[1] = 0.0
     if (np.abs(a1) > 0.0).any():
         a2 = [0, 0, 1]
         b1 = [0, 1, 0]
         b2 = [0, 1, 0]
         rot_matrix = rotation_matrix(a1, a2, b1, b2)
-        for k, _ in enumerate(atoms):
-            atoms[k].position = np.dot(atoms[k].position, rot_matrix.T)
+        for kk, _ in enumerate(atoms):
+            atoms[kk].position = np.dot(atoms[kk].position, rot_matrix.T)
 
     return atoms
 
@@ -282,14 +282,14 @@ def branch_bidentate(atoms, bond_index):
             b1 = atoms[int(bond)].position - centre
             b2 = atoms[int(bond)].position - centre
             rot_matrix = rotation_matrix(a1, a2, b1, b2)
-            for k in indices:
-                atoms[k].position = np.dot(atoms[k].position, rot_matrix.T)
+            for kk in indices:
+                atoms[int(kk)].position = np.dot(atoms[int(kk)].position, rot_matrix.T)
 
     # Restore adsorbate bond.
     if len(links) == 0:
         atoms.graph.add_edge(*bond_index)
     else:
-        for k in links:
+        for kk in links:
             atoms.graph.add_edge(bond_index[0], bb)
             atoms.graph.add_edge(bond_index[1], bb)
 
