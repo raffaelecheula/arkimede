@@ -15,7 +15,7 @@ def main():
     step_actlearn = 1
     
     # Name of ase database.
-    db_name = f"databases/ocp_{step_actlearn:02d}.db"
+    db_name = f"databases/vasp_{step_actlearn:02d}.db"
     
     # Filter atoms structures.
     selection = ""

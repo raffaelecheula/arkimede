@@ -15,7 +15,7 @@ from arkimede.ocp.ocp_calc import OCPCalculatorCounter
 def main():
 
     # Active learning step.
-    filename_actlearn = "actlearn.json"
+    filename_actlearn = "actlearn.yaml"
     step_actlearn = read_step_actlearn(filename=filename_actlearn)
 
     # Name of ase database containing the unrelaxed structures to read.

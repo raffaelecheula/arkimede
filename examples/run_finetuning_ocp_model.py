@@ -3,7 +3,7 @@
 # -------------------------------------------------------------------------------------
 
 import os
-from arkimede.workflow.utilities import read_step_actlearn
+from arkimede.workflow.utilities import read_step_actlearn, write_step_actlearn
 from arkimede.ocp.ocp_utils import (
     ocp_main,
     get_checkpoint_path,
@@ -20,7 +20,7 @@ from arkimede.ocp.ocp_utils import (
 def main():
     
     # Active learning step.
-    filename_actlearn = "actlearn.json"
+    filename_actlearn = "actlearn.yaml"
     step_actlearn = read_step_actlearn(filename=filename_actlearn)
     
     # Name of dft databases.
@@ -31,12 +31,13 @@ def main():
     db_tot_name = "databases/vasp_tot.db"
     merge_databases(db_name_list=db_name_list, db_new_name=db_tot_name)
     
-    # Directory and identifier for fine tuning.
+    # Directory and identifier for fine-tuning.
     directory = "finetuning"
     identifier = f"step-{step_actlearn+1:02d}"
     
     # OCPmodels checkpoint path.
     checkpoint_key = 'GemNet-OC OC20+OC22 v2'
+    #checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
     if step_actlearn == 0:
         checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
     else:
@@ -46,16 +47,22 @@ def main():
     config_yaml = f"{directory}/config.yml"
     output = f"{directory}/{identifier}.txt"
     
+    # Update active learning step.
+    #step_actlearn += 1
+    #write_step_actlearn(filename=filename_actlearn, step=step_actlearn)
+    
     # Split the database into train, test (optional), and val databases.
     split_database(
-        db_name=db_tot_name,
+        db_ase_name=db_tot_name,
         fractions=(0.8, 0.2),
         filenames=("train.db", "val.db"),
         directory=directory,
         seed=42,
         change_energy_ref_fun=None,
     )
+    exit()
     
+    # Update config file.
     delete_keys = [
         'slurm',
         'cmd',
@@ -67,7 +74,6 @@ def main():
         'val_dataset',
         'optim.loss_force',
     ]
-    
     update_keys = {
         'gpus': 1,
         'task.dataset': 'ase_db',
@@ -86,7 +92,6 @@ def main():
         'logger': 'wandb',
         'optim.early_stopping_lr': 1e-7,
     }
-    
     update_config_yaml(
         checkpoint_path=checkpoint_path,
         config_yaml=config_yaml,
@@ -94,6 +99,7 @@ def main():
         update_keys=update_keys,
     )
     
+    # Fine-tuning settings.
     args_dict = {
         "mode": "train",
         "config-yml": config_yaml,
@@ -103,6 +109,7 @@ def main():
         "amp": "",
     }
     
+    # Run the fine-tuning.
     command = f"python {ocp_main()}"
     for arg in args_dict:
         command += f" --{arg} {args_dict[arg]}"

@@ -24,7 +24,7 @@ from arkimede.workflow.dft_calculations import (
 def main():
     
     # Active learning step.
-    filename_actlearn = "actlearn.json"
+    filename_actlearn = "actlearn.yaml"
     step_actlearn = read_step_actlearn(filename=filename_actlearn)
     
     # Name of ase database containing the structures to read.

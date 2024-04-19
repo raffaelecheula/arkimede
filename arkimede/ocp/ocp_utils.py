@@ -200,7 +200,7 @@ def get_checkpoint_path_actlearn(step_actlearn, directory="finetuning"):
 # -------------------------------------------------------------------------------------
 
 def split_database(
-    db_name,
+    db_ase_name,
     change_energy_ref_fun=None,
     fractions=(0.8, 0.1, 0.1),
     filenames=('train.db', 'test.db', 'val.db'),
@@ -232,7 +232,7 @@ def split_database(
         db_name_list.append(db_name)
     
     # Read source database.
-    db_ase = connect(db_name)
+    db_ase = connect(db_ase_name)
     n_data = db_ase.count()
     
     # Set sum of fractions equal to 1 and get numbers of data.
