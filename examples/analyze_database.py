@@ -12,16 +12,20 @@ from ase.gui.gui import GUI
 
 def main():
     
+    # Active learning step.
+    step_actlearn = 1
+    
     # Name of ase database.
-    db_ase_name = "database_ocp_2.db"
+    db_name = f"databases/ocp_{step_actlearn:02d}.db"
     
     # Select atoms from the database.
-    calculation = "dimer"
-    selection = f"calculation={calculation}"
-    #selection = "Rh>0,status=finished"
+    calculation = "climbbonds"
+    selection = ""
+    #selection += f"calculation={calculation},"
+    #selection += "surf_structure=fcc-Rh-100,"
     
     # Initialize ase database.
-    db_ase = connect(name=db_ase_name)
+    db_ase = connect(name=db_name)
 
     # Print number of selected atoms.
     selected = list(db_ase.select(selection=selection))
@@ -36,8 +40,8 @@ def main():
         atoms.info = atoms_row.data
         atoms_list.append(atoms)
     
-    gui = GUI(atoms_list)
-    gui.run()
+    #gui = GUI(atoms_list)
+    #gui.run()
 
 # -------------------------------------------------------------------------------------
 # IF NAME MAIN

@@ -148,7 +148,7 @@ def list_checkpoints():
         print(key)
 
 # -------------------------------------------------------------------------------------
-# GET CHECKPOINT
+# GET CHECKPOINT PATH
 # -------------------------------------------------------------------------------------
         
 def get_checkpoint_path(checkpoint_key, basedir=checkpoints_basedir()):
@@ -182,11 +182,25 @@ def get_checkpoint_path(checkpoint_key, basedir=checkpoints_basedir()):
     return checkpoint_path      
 
 # -------------------------------------------------------------------------------------
+# GET CHECKPOINT PATH ACTLEARN
+# -------------------------------------------------------------------------------------
+
+def get_checkpoint_path_actlearn(step_actlearn, directory="finetuning"):
+    """Get checkpoint path after fine tuning."""
+    checkpoint_path = None
+    basepath = os.path.join(directory, "checkpoints")
+    for dirname in sorted(os.listdir(basepath)):
+        if int(dirname.split("-")[-1]) == step_actlearn:
+            checkpoint_path = os.path.join(basepath, dirname, "best_checkpoint.pt")
+            break
+    return checkpoint_path
+
+# -------------------------------------------------------------------------------------
 # SPLIT DATABASE
 # -------------------------------------------------------------------------------------
 
 def split_database(
-    db_ase_name,
+    db_name,
     change_energy_ref_fun=None,
     fractions=(0.8, 0.1, 0.1),
     filenames=('train.db', 'test.db', 'val.db'),
@@ -195,7 +209,7 @@ def split_database(
 ):
     """Split an ase db into train, test and validation dbs.
     
-    db_ase_name: path to an ase db containing all the data.
+    db_name: path to an ase db containing all the data.
     change_energy_ref_fun: function to change the reference energy for OCP models.
     fractions: a tuple containing the fraction of train, test and val data. 
         This will be normalized.
@@ -218,7 +232,7 @@ def split_database(
         db_name_list.append(db_name)
     
     # Read source database.
-    db_ase = connect(db_ase_name)
+    db_ase = connect(db_name)
     n_data = db_ase.count()
     
     # Set sum of fractions equal to 1 and get numbers of data.
@@ -244,6 +258,22 @@ def split_database(
                 atoms.calc.results["energy"] = energy
             db_new.write(atoms)
         num += n_data_array[ii]
+
+# -------------------------------------------------------------------------------------
+# MERGE DATABASES
+# -------------------------------------------------------------------------------------
+
+def merge_databases(db_name_list, db_new_name):
+    """Merge databases into one new database."""
+    from ase.db import connect
+    
+    db_new = connect(db_new_name)
+    for ii, db_name in enumerate(db_name_list):
+        db_ase = connect(db_name)
+        for id in range(1, db_ase.count()+1):
+            row = db_ase.get(id=int(id))
+            atoms = row.toatoms()
+            db_new.write(atoms)
 
 # -------------------------------------------------------------------------------------
 # UPDATE CONFIG YAML

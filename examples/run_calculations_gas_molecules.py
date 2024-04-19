@@ -22,17 +22,17 @@ from arkimede.workflow.dft_calculations import (
 def main():
 
     # Name of ase database containing the unrelaxed structures to read.
-    db_init_name = "database_init.db"
+    db_init_name = "databases/init.db"
 
     # Select atoms from the ase database.
     selection = ""
 
     # Name of ase dft database to store the results of the dft calculations.
-    db_dft_name = "database_gas.db"
+    db_dft_name = "databases/vasp_gas.db"
     db_dft_append = True
     
     # Name of the folder for asevasp gas calculations.
-    basedir_dft_calc = "calculations_gas"
+    basedir_dft_calc = "calculations/vasp_gas"
     
     # Name of the template yaml file and namespace for kubernetes submission.
     template_yaml = templates_basedir() / "template_k8s.yaml"

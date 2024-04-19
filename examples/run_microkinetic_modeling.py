@@ -28,7 +28,7 @@ def main():
     vol_flow_rate = 1e-6 # [m^3/s]
     
     # Name of ase database.
-    db_ase_name = "database.db"
+    db_ase_name = "databases/vasp_tot.db"
 
     # Initialize ase database.
     db_ase = connect(name=db_ase_name)
@@ -37,16 +37,16 @@ def main():
     bulk_structure = "fcc"
     element_bulk_list = [
         "Rh",
-        "Cu",
-        "Pd",
-        "Co",
-        "Ni",
-        "Au",
+        #"Cu",
+        #"Pd",
+        #"Co",
+        #"Ni",
+        #"Au",
     ]
     miller_index_list = [
         "100",
         #"110",
-        "111",
+        #"111",
     ]
 
     # Adsorbates names.

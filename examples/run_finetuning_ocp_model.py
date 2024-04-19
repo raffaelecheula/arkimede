@@ -3,10 +3,13 @@
 # -------------------------------------------------------------------------------------
 
 import os
+from arkimede.workflow.utilities import read_step_actlearn
 from arkimede.ocp.ocp_utils import (
     ocp_main,
     get_checkpoint_path,
+    get_checkpoint_path_actlearn,
     split_database,
+    merge_databases,
     update_config_yaml,
 )
 
@@ -16,16 +19,28 @@ from arkimede.ocp.ocp_utils import (
 
 def main():
     
-    # Name of ase dft database.
-    db_dft_name = "database_vasp.db"
+    # Active learning step.
+    filename_actlearn = "actlearn.json"
+    step_actlearn = read_step_actlearn(filename=filename_actlearn)
     
-    # Directory and identifier for fine-tuning.
-    directory = "fine-tuning"
-    identifier = "fine-tuning"
+    # Name of dft databases.
+    db_name_list = [f"databases/vasp_{ii:02d}.db" for ii in range(step_actlearn+1)]
+    db_name_list.append("databases/vasp_gas.db")
+    
+    # Merge databases into one total database.
+    db_tot_name = "databases/vasp_tot.db"
+    merge_databases(db_name_list=db_name_list, db_new_name=db_tot_name)
+    
+    # Directory and identifier for fine tuning.
+    directory = "finetuning"
+    identifier = f"step-{step_actlearn+1:02d}"
     
     # OCPmodels checkpoint path.
     checkpoint_key = 'GemNet-OC OC20+OC22 v2'
-    checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
+    if step_actlearn == 0:
+        checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
+    else:
+        checkpoint_path = get_checkpoint_path_actlearn(step_actlearn=step_actlearn)
     
     # New yaml config and output files.
     config_yaml = f"{directory}/config.yml"
@@ -33,7 +48,7 @@ def main():
     
     # Split the database into train, test (optional), and val databases.
     split_database(
-        db_ase_name=db_dft_name,
+        db_name=db_tot_name,
         fractions=(0.8, 0.2),
         filenames=("train.db", "val.db"),
         directory=directory,
@@ -58,8 +73,8 @@ def main():
         'task.dataset': 'ase_db',
         'optim.eval_every': 4,
         'optim.max_epochs': 1000,
-        'optim.lr_initial': 4e-5,
-        'optim.batch_size': 4,
+        'optim.lr_initial': 1e-5,
+        'optim.batch_size': 1,
         'optim.num_workers': 4,
         'dataset.train.src': f"{directory}/train.db",
         'dataset.train.a2g_args.r_energy': True,
@@ -69,7 +84,7 @@ def main():
         'dataset.val.a2g_args.r_forces': True,
         'task.primary_metric': "forces_mae",
         'logger': 'wandb',
-        #'optim.early_stopping_lr': 1e-8,
+        'optim.early_stopping_lr': 1e-7,
     }
     
     update_config_yaml(

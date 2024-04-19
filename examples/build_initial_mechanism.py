@@ -15,7 +15,7 @@ from arkimede.workflow.reaction_workflow import MechanismCalculator
 def main():
 
     # Name of ase database to store unrelaxed structures.
-    db_init_name = "database_init.db"
+    db_init_name = "databases/init.db"
     db_init_append = False
 
     # Arkimede adsorption parameters.
@@ -54,7 +54,7 @@ def main():
     miller_index_list = [
         "100",
         #"110",
-        "111",
+        #"111",
         #"210",
         #"211",
         #"221",

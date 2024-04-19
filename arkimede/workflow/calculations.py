@@ -10,6 +10,7 @@ from arkimede.workflow.utilities import (
     get_atoms_not_fixed,
     get_atoms_not_surface,
     filter_results,
+    get_atoms_too_close,
 )
 
 # -------------------------------------------------------------------------------------
@@ -326,6 +327,7 @@ def run_climbbonds_calculation(
     fmax=0.01,
     steps_max=500,
     max_displacement=None,
+    atoms_too_close=True,
     properties=["energy", "forces"],
     **kwargs,
 ):
@@ -363,6 +365,12 @@ def run_climbbonds_calculation(
             if displ > max_displacement:
                 opt.max_steps = 0
         opt.insert_observer(function=check_displacement, interval=10)
+    
+    if atoms_too_close:
+        def check_atoms_too_close():
+            if get_atoms_too_close(atoms, return_anomaly=True) is True:
+                opt.max_steps = 0
+        opt.insert_observer(function=check_atoms_too_close, interval=10)
     
     # Run the calculation.
     try:

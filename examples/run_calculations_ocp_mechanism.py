@@ -4,8 +4,8 @@
 
 from ase.db import connect
 from arkimede.workflow.reaction_workflow import run_ase_calculations_mechanism
-from arkimede.workflow.utilities import get_atoms_list_from_db
-from arkimede.ocp.ocp_utils import get_checkpoint_path
+from arkimede.workflow.utilities import get_atoms_list_from_db, read_step_actlearn
+from arkimede.ocp.ocp_utils import get_checkpoint_path, get_checkpoint_path_actlearn
 from arkimede.ocp.ocp_calc import OCPCalculatorCounter
 
 # -------------------------------------------------------------------------------------
@@ -14,14 +14,19 @@ from arkimede.ocp.ocp_calc import OCPCalculatorCounter
 
 def main():
 
+    # Active learning step.
+    filename_actlearn = "actlearn.json"
+    step_actlearn = read_step_actlearn(filename=filename_actlearn)
+
     # Name of ase database containing the unrelaxed structures to read.
-    db_init_name = "database_init.db"
+    db_init_name = "databases/init.db"
 
     # Select atoms from the ase database.
     selection = ""
+    #selection += "surf_structure=fcc-Rh-100"
 
     # Name of ase database to store the results of the calculations.
-    db_ase_name = "database_ocp.db"
+    db_ase_name = f"databases/ocp_{step_actlearn:02d}.db"
     db_ase_append = True
 
     # Calculations parameters.
@@ -35,11 +40,14 @@ def main():
     # Save trajectories and write images.
     save_trajs = False
     write_images = False
-    basedir_trajs = "calculations_ocp"
+    basedir_trajs = "calculations/ocp"
 
     # OCPmodels ase calculator.
     checkpoint_key = 'GemNet-OC OC20+OC22 v2'
-    checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
+    if step_actlearn == 0:
+        checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
+    else:
+        checkpoint_path = get_checkpoint_path_actlearn(step_actlearn=step_actlearn)
     calc = OCPCalculatorCounter(checkpoint_path=checkpoint_path, cpu=False)
     
     # ---------------------------------------------------------------------------------

@@ -2,18 +2,8 @@
 # IMPORTS
 # -------------------------------------------------------------------------------------
 
-import yaml
 import numpy as np
-from ase.io import read
 from ase.db import connect
-from ase.calculators.vasp.vasp import Vasp
-from arkimede.utils import templates_basedir
-from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
-from arkimede.workflow.dft_calculations import (
-    write_input_vasp,
-    check_finished_vasp,
-    job_queued_k8s,
-)
 
 # -------------------------------------------------------------------------------------
 # MAIN
@@ -21,19 +11,25 @@ from arkimede.workflow.dft_calculations import (
 
 def main():
     
-    # Name of ase dft database to store the results of the dft calculations.
-    db_dft_name = "database_vasp.db"
+    # Active learning step.
+    step_actlearn = 1
+    
+    # Name of ase database.
+    db_name = f"databases/ocp_{step_actlearn:02d}.db"
+    
+    # Filter atoms structures.
+    selection = ""
     
     # ---------------------------------------------------------------------------------
     # RUN DFT CALCULATIONS
     # ---------------------------------------------------------------------------------
     
     # Initialize ase database.
-    db_ase = connect(name=db_dft_name)
+    db_ase = connect(name=db_name)
 
     # Get list of atoms from database.
     forces = None
-    for id in [aa.id for aa in db_ase.select(selection="")]:
+    for id in [aa.id for aa in db_ase.select(selection=selection)]:
         atoms_row = db_ase.get(id=id)
         atoms = atoms_row.toatoms()
         atoms.info = atoms_row.data

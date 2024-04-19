@@ -1,8 +1,10 @@
 # Custom
 *.db
 checkpoints/*
+examples/databases*
 examples/calculations*
-examples/fine-tuning*
+examples/finetuning*
+examples/actlearn.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

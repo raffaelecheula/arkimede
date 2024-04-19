@@ -9,6 +9,7 @@ from ase.db import connect
 from ase.calculators.vasp.vasp import Vasp
 from arkimede.utils import templates_basedir
 from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
+from arkimede.workflow.utilities import read_step_actlearn
 from arkimede.workflow.dft_calculations import (
     write_input_vasp,
     read_output_vasp,
@@ -22,18 +23,23 @@ from arkimede.workflow.dft_calculations import (
 
 def main():
     
+    # Active learning step.
+    filename_actlearn = "actlearn.json"
+    step_actlearn = read_step_actlearn(filename=filename_actlearn)
+    
     # Name of ase database containing the structures to read.
-    db_ase_name = "database_ocp.db"
+    db_ase_name = f"databases/ocp_{step_actlearn:02d}.db"
 
     # Select atoms from the ase database.
-    selection = "status=finished"
+    selection = "status=finished,"
+    selection += "surf_structure=fcc-Rh-100,"
     
     # Name of ase dft database to store the results of the dft calculations.
-    db_dft_name = "database_vasp.db"
+    db_dft_name = f"databases/vasp_{step_actlearn:02d}.db"
     db_dft_append = True
     
     # Name of the folder for dft single point calculations.
-    basedir_dft_calc = "calculations_vasp"
+    basedir_dft_calc = f"calculations/vasp_{step_actlearn:02d}"
     
     # Name of the template yaml file and namespace for kubernetes submission.
     template_yaml = templates_basedir() / "template_k8s.yaml"

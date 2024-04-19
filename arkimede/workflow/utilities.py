@@ -2,6 +2,8 @@
 # IMPORTS
 # -------------------------------------------------------------------------------------
 
+import os
+import yaml
 import numpy as np
 from ase import Atoms
 from ase.neb import NEB, idpp_interpolate
@@ -413,6 +415,49 @@ def get_atoms_list_from_db(db_ase, selection, structure_type):
 
 def filter_results(results, properties=all_properties):
     return {pp: results[pp] for pp in results if pp in properties}
+
+# -------------------------------------------------------------------------------------
+# GET ATOMS TOO CLOSE
+# -------------------------------------------------------------------------------------
+
+def get_atoms_too_close(atoms, mindist=0.2, return_anomaly=False):
+    """Get indices of atoms too close to each other."""
+    indices = []
+    for ii, position in enumerate(atoms.positions):
+        distances = np.linalg.norm(atoms.positions[ii+1:]-position, axis=1)
+        duplicates = np.where(distances < mindist)[0]
+        if len(duplicates) > 0:
+            indices += [jj+ii+1 for jj in duplicates if jj+ii+1 not in indices]
+            if return_anomaly is True:
+                break
+    
+    if return_anomaly is True:
+        return len(indices) > 0
+    else:
+        return indices
+
+# -------------------------------------------------------------------------------------
+# READ STEP ACTLEARN
+# -------------------------------------------------------------------------------------
+
+def read_step_actlearn(filename):
+    """Get the current step of the active learning loop."""
+    if os.path.isfile(filename):
+        with open(filename, "r") as fileobj:
+            step = yaml.safe_load(fileobj)["step_actlearn"]
+    else:
+        step = 0
+        write_step_actlearn(filename=filename, step=step)
+    return step
+
+# -------------------------------------------------------------------------------------
+# WRITE STEP ACTLEARN
+# -------------------------------------------------------------------------------------
+
+def write_step_actlearn(filename, step):
+    """Write the new step of the active learning loop."""
+    with open(filename, "w") as fileobj:
+        yaml.dump({"step_actlearn": step}, fileobj)
 
 # -------------------------------------------------------------------------------------
 # END
