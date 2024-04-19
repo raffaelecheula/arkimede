@@ -233,7 +233,8 @@ def run_ase_calculations_mechanism(
                 run_vibrations_calculation(
                     atoms=atoms,
                     calc=calc,
-                    remove_vib_dir=True,
+                    remove_cache=True,
+                    save_trajs=False,
                 )
             write_atoms_to_db(atoms=atoms, db_ase=db_ase)
         print_results_calculation(atoms=atoms)
@@ -362,7 +363,8 @@ def run_ase_calculations_mechanism(
                 run_vibrations_calculation(
                     atoms=atoms_TS,
                     calc=calc,
-                    remove_vib_dir=True,
+                    remove_cache=True,
+                    save_trajs=False,
                 )
                 write_atoms_to_db(atoms=atoms_TS, db_ase=db_ase)
 

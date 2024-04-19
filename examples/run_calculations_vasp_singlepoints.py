@@ -26,7 +26,7 @@ def main():
     db_ase_name = "database_ocp.db"
 
     # Select atoms from the ase database.
-    selection = "calculation=climbbonds,status=finished,surf_structure=fcc-Rh-100"
+    selection = "status=finished"
     
     # Name of ase dft database to store the results of the dft calculations.
     db_dft_name = "database_vasp.db"
