@@ -6,7 +6,11 @@ import os
 import numpy as np
 from ase.io import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
-from arkimede.workflow.utilities import get_atoms_not_fixed, get_atoms_not_surface
+from arkimede.workflow.utilities import (
+    get_atoms_not_fixed,
+    get_atoms_not_surface,
+    filter_results,
+)
 
 # -------------------------------------------------------------------------------------
 # RUN RELAX CALCULATION
@@ -18,11 +22,13 @@ def run_relax_calculation(
     fmax=0.01,
     steps_max=300,
     logfile='-',
-    name='relax',
+    label='relax',
     directory='.',
     save_trajs=False,
     write_images=False,
     update_cell=False,
+    properties=["energy", "forces"],
+    **kwargs,
 ):
     """Run a relax calculation."""
     from ase.optimize import BFGS
@@ -32,10 +38,9 @@ def run_relax_calculation(
         os.makedirs(directory, exist_ok=True)
 
     # Name of the trajectory file.
+    trajname = None
     if save_trajs is True:
-        trajectory = os.path.join(directory, f'{name}.traj')
-    else:
-        trajectory = None
+        trajname = os.path.join(directory, f'{label}.traj')
 
     # Setup the BFGS solver.
     atoms_copy = atoms.copy()
@@ -43,7 +48,7 @@ def run_relax_calculation(
     opt = BFGS(
         atoms=atoms_copy,
         logfile=logfile,
-        trajectory=trajectory,
+        trajectory=trajname,
     )
     
     # Run the calculation.
@@ -58,17 +63,14 @@ def run_relax_calculation(
     atoms.set_positions(atoms_copy.positions)
     if update_cell is True:
         atoms.set_cell(atoms_copy.cell)
-    atoms.calc = SinglePointCalculator(
-        atoms=atoms,
-        energy=atoms_copy.calc.results['energy'],
-        forces=atoms_copy.calc.results['forces'],
-    )
+    results = filter_results(results=atoms_copy.calc.results, properties=properties)
+    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
     # Write image.
     if write_images is True:
-        filename = os.path.join(directory, f"{name}.png")
+        filename = os.path.join(directory, f"{label}.png")
         atoms.write(filename, radii=0.9, scale=200)
 
 # -------------------------------------------------------------------------------------
@@ -81,7 +83,7 @@ def run_neb_calculation(
     fmax=0.01,
     steps_max=300,
     k_neb=0.10,
-    name='neb',
+    label='neb',
     directory='.',
     save_trajs=False,
     write_images=False,
@@ -91,6 +93,7 @@ def run_neb_calculation(
     activate_climb=True,
     print_energies=True,
     ftres_climb=0.10,
+    **kwargs,
 ):
     """Run a NEB calculation."""
     
@@ -99,10 +102,9 @@ def run_neb_calculation(
         os.makedirs(directory, exist_ok=True)
     
     # Name of the trajectory file.
+    trajname = None
     if save_trajs is True:
-        trajectory = os.path.join(directory, f'{name}.traj')
-    else:
-        trajectory = None
+        trajname = os.path.join(directory, f'{label}.traj')
     
     # Choose NEB method.
     if use_OCPdyNEB:
@@ -176,9 +178,9 @@ def run_neb_calculation(
     
     # Write trajectory.
     if save_trajs is True:
-        traj = Trajectory(filename=trajectory, mode='w')
-        for atoms in images:
-            traj.write(atoms)
+        with Trajectory(filename=trajname, mode='w') as traj:
+            for atoms in images:
+                traj.write(atoms, **atoms.calc.results)
     
     # Update images with the results.
     for atoms in images:
@@ -189,7 +191,7 @@ def run_neb_calculation(
     if write_images is True:
         index_TS = np.argmax([atoms.get_potential_energy() for atoms in images])
         atoms = images[index_TS]
-        filename = os.path.join(directory, f"{name}.png")
+        filename = os.path.join(directory, f"{label}.png")
         atoms.write(filename, radii=0.9, scale=200)
 
 # -------------------------------------------------------------------------------------
@@ -201,7 +203,7 @@ def run_dimer_calculation(
     calc,
     bonds_TS=None,
     vector=None,
-    name='dimer',
+    label='dimer',
     directory='.',
     save_trajs=False,
     write_images=False,
@@ -212,6 +214,8 @@ def run_dimer_calculation(
     max_displacement=False,
     reset_eigenmode=True,
     sign_bond_dict={'break': +1, 'form': -1},
+    properties=["energy", "forces"],
+    **kwargs,
 ):
     """Run a dimer calculation."""
     from ase.dimer import DimerControl, MinModeAtoms, MinModeTranslate
@@ -222,10 +226,9 @@ def run_dimer_calculation(
         os.makedirs(directory, exist_ok=True)
 
     # Name of the trajectory file.
+    trajname = None
     if save_trajs is True:
-        trajectory = os.path.join(directory, f'{name}.traj')
-    else:
-        trajectory = None
+        trajname = os.path.join(directory, f'{label}.traj')
 
     if vector is None:
         vector = atoms.info.get("vector").copy()
@@ -258,12 +261,12 @@ def run_dimer_calculation(
 
     opt = MinModeTranslate(
         atoms=atoms_dimer,
-        trajectory=trajectory,
+        trajectory=trajname,
         logfile=logfile,
     )
     
     # Observer that reset the eigenmode to the direction of the ts bonds.
-    # Maybe there is a better way of doind this (e.g., selecting the 
+    # Maybe there is a better way of doing this (e.g., selecting the 
     # eigenmode most similar to the directions of the ts bonds).
     if bonds_TS and reset_eigenmode:
         def reset_eigenmode_obs(atoms_dimer = atoms_dimer):
@@ -295,18 +298,15 @@ def run_dimer_calculation(
     atoms.set_positions(atoms_dimer.positions)
     if update_cell is True:
         atoms.set_cell(atoms_dimer.cell)
-    atoms.calc = SinglePointCalculator(
-        atoms=atoms,
-        energy=atoms_dimer.calc.results['energy'],
-        forces=atoms_dimer.calc.results['forces'],
-    )
+    results = filter_results(results=atoms_dimer.calc.results, properties=properties)
+    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     atoms.info["vector"] = atoms_dimer.eigenmodes[0]
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
     # Write image.
     if write_images is True:
-        filename = os.path.join(directory, f"{name}.png")
+        filename = os.path.join(directory, f"{label}.png")
         atoms.write(filename, radii=0.9, scale=200)
 
 # -------------------------------------------------------------------------------------
@@ -317,7 +317,7 @@ def run_climbbonds_calculation(
     atoms,
     bonds_TS,
     calc,
-    name='climbbonds',
+    label='climbbonds',
     directory='.',
     save_trajs=False,
     write_images=False,
@@ -326,6 +326,8 @@ def run_climbbonds_calculation(
     fmax=0.01,
     steps_max=500,
     max_displacement=None,
+    properties=["energy", "forces"],
+    **kwargs,
 ):
     """Run a climbbonds calculation."""
     from arkimede.optimize.climbbonds import ClimbBonds
@@ -336,10 +338,9 @@ def run_climbbonds_calculation(
         os.makedirs(directory, exist_ok=True)
     
     # Name of the trajectory file.
+    trajname = None
     if save_trajs is True:
-        trajectory = os.path.join(directory, f'{name}.traj')
-    else:
-        trajectory = None
+        trajname = os.path.join(directory, f'{label}.traj')
     
     # Create a copy of the atoms object to not mess with constraints.
     atoms_copy = atoms.copy()
@@ -352,7 +353,7 @@ def run_climbbonds_calculation(
     opt = ODE12r(
         atoms=atoms_copy,
         logfile=logfile,
-        trajectory=trajectory,
+        trajectory=trajname,
     )
     
     # Observer that checks the displacement of the ts from the starting position.
@@ -375,17 +376,14 @@ def run_climbbonds_calculation(
     atoms.set_positions(atoms_copy.positions)
     if update_cell is True:
         atoms.set_cell(atoms_copy.cell)
-    atoms.calc = SinglePointCalculator(
-        atoms=atoms,
-        energy=atoms_copy.calc.results['energy'],
-        forces=atoms_copy.calc.results['forces'],
-    )
+    results = filter_results(results=atoms_copy.calc.results, properties=properties)
+    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
     # Write image.
     if write_images is True:
-        filename = os.path.join(directory, f"{name}.png")
+        filename = os.path.join(directory, f"{label}.png")
         atoms.write(filename, radii=0.9, scale=200)
 
 # -------------------------------------------------------------------------------------
@@ -396,7 +394,7 @@ def run_climbfixint_calculation(
     atoms,
     bonds_TS,
     calc,
-    name='climbfixint',
+    label='climbfixint',
     index_constr2climb=0,
     directory='.',
     save_trajs=False,
@@ -407,6 +405,8 @@ def run_climbfixint_calculation(
     steps_max=500,
     optB_kwargs={'logfile': '-', 'trajectory': None},
     max_displacement=None,
+    properties=["energy", "forces"],
+    **kwargs,
 ):
     """Run a climbfixinternals calculation."""
     from arkimede.optimize.climbfixinternals import (
@@ -419,10 +419,9 @@ def run_climbfixint_calculation(
         os.makedirs(directory, exist_ok=True)
     
     # Name of the trajectory file.
+    trajname = None
     if save_trajs is True:
-        trajectory = os.path.join(directory, f'{name}.traj')
-    else:
-        trajectory = None
+        trajname = os.path.join(directory, f'{label}.traj')
     
     # Create a copy of the atoms object to not mess with constraints.
     atoms_copy = atoms.copy()
@@ -435,7 +434,7 @@ def run_climbfixint_calculation(
     opt = BFGSClimbFixInternals(
         atoms=atoms_copy,
         logfile=logfile,
-        trajectory=trajectory,
+        trajectory=trajname,
         index_constr2climb=index_constr2climb,
         optB_kwargs=optB_kwargs,
     )
@@ -460,17 +459,14 @@ def run_climbfixint_calculation(
     atoms.set_positions(atoms_copy.positions)
     if update_cell is True:
         atoms.set_cell(atoms_copy.cell)
-    atoms.calc = SinglePointCalculator(
-        atoms=atoms,
-        energy=atoms_copy.calc.results['energy'],
-        forces=atoms_copy.calc.results['forces'],
-    )
+    results = filter_results(results=atoms_copy.calc.results, properties=properties)
+    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
     # Write image.
     if write_images is True:
-        filename = os.path.join(directory, f"{name}.png")
+        filename = os.path.join(directory, f"{label}.png")
         atoms.write(filename, radii=0.9, scale=200)
 
 # -------------------------------------------------------------------------------------
@@ -481,7 +477,7 @@ def run_sella_calculation(
     atoms,
     calc,
     bonds_TS,
-    name='sella',
+    label='sella',
     directory='.',
     save_trajs=False,
     write_images=False,
@@ -489,6 +485,8 @@ def run_sella_calculation(
     logfile='-',
     fmax=0.01,
     steps_max=500,
+    properties=["energy", "forces"],
+    **kwargs,
 ):
     """Run a sella calculation."""
     from sella import Sella, Constraints
@@ -498,10 +496,9 @@ def run_sella_calculation(
         os.makedirs(directory, exist_ok=True)
 
     # Name of the trajectory file.
+    trajname = None
     if save_trajs is True:
-        trajectory = os.path.join(directory, f'{name}.traj')
-    else:
-        trajectory = None
+        trajname = os.path.join(directory, f'{label}.traj')
 
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
@@ -514,7 +511,7 @@ def run_sella_calculation(
     opt = Sella(
         atoms=atoms_copy,
         constraints=constraints,
-        trajectory=trajectory,
+        trajectory=trajname,
         logfile=logfile,
     )
     
@@ -530,90 +527,15 @@ def run_sella_calculation(
     atoms.set_positions(atoms_copy.positions)
     if update_cell is True:
         atoms.set_cell(atoms_copy.cell)
-    atoms.calc = SinglePointCalculator(
-        atoms=atoms,
-        energy=atoms_copy.calc.results['energy'],
-        forces=atoms_copy.calc.results['forces'],
-    )
+    results = filter_results(results=atoms_copy.calc.results, properties=properties)
+    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
 
     # Write image.
     if write_images is True:
-        filename = os.path.join(directory, f"{name}.png")
+        filename = os.path.join(directory, f"{label}.png")
         atoms.write(filename, radii=0.9, scale=200)
-
-# -------------------------------------------------------------------------------------
-# RUN TS SEARCH CALCULATION
-# -------------------------------------------------------------------------------------
-
-def run_TS_search_calculation(
-    atoms,
-    calc,
-    bonds_TS,
-    search_TS,
-    directory='.',
-    save_trajs=False,
-    write_images=False,
-    update_cell=False,
-    logfile='-',
-    fmax=0.01,
-    steps_max=500,
-    **kwargs,
-):
-    """Run TS search calculation."""
-    if search_TS == "dimer":
-        # Dimer calculation.
-        run_dimer_calculation(
-            atoms=atoms,
-            calc=calc,
-            steps_max=steps_max,
-            bonds_TS=bonds_TS,
-            fmax=fmax,
-            directory=directory,
-            save_trajs=save_trajs,
-            write_images=write_images,
-            **kwargs,
-        )
-    elif search_TS == "climbbonds":
-        # Climbbonds calculaton.
-        run_climbbonds_calculation(
-            atoms=atoms,
-            calc=calc,
-            steps_max=steps_max,
-            bonds_TS=bonds_TS,
-            fmax=fmax,
-            directory=directory,
-            save_trajs=save_trajs,
-            write_images=write_images,
-            **kwargs,
-        )
-    elif search_TS == "climbfixint":
-        # ClimbFixInternals calculaton.
-        run_climbfixint_calculation(
-            atoms=atoms,
-            calc=calc,
-            steps_max=steps_max,
-            bonds_TS=bonds_TS,
-            fmax=fmax,
-            directory=directory,
-            save_trajs=save_trajs,
-            write_images=write_images,
-            **kwargs,
-        )
-    elif search_TS == "sella":
-        # Sella calculaton.
-        run_sella_calculation(
-            atoms=atoms,
-            calc=calc,
-            steps_max=steps_max,
-            bonds_TS=bonds_TS,
-            fmax=fmax,
-            directory=directory,
-            save_trajs=save_trajs,
-            write_images=write_images,
-            **kwargs,
-        )
 
 # -------------------------------------------------------------------------------------
 # RUN VIBRATIONS CALCULATION
@@ -623,16 +545,17 @@ def run_vibrations_calculation(
     atoms,
     calc,
     indices="not_surface",
-    name="vib",
+    label="vibrations",
     delta=0.01,
     nfree=2,
-    properties=["energy", "forces"],
+    directory=".",
     remove_cache=False,
-    write_trajs=False,
+    save_trajs=False,
+    properties=["energy", "forces"],
+    **kwargs,
 ):
     """Run a vibrations calculation."""
     from ase.vibrations import Vibrations
-    from ase.io import Trajectory
     
     # Get indices of atoms to vibrate.
     if indices == "not_surface":
@@ -640,6 +563,10 @@ def run_vibrations_calculation(
     elif indices == "not_fixed":
         indices = get_atoms_not_fixed(atoms)
     
+    # Create directory to store the results.
+    if save_trajs is True:
+        os.makedirs(directory, exist_ok=True)
+
     # Initialize the vibrations calculation.
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
@@ -658,7 +585,7 @@ def run_vibrations_calculation(
     vib = VibrationsWithEnergy(
         atoms=atoms_copy,
         indices=indices,
-        name=name,
+        name=label,
         delta=delta,
         nfree=nfree,
     )
@@ -668,23 +595,82 @@ def run_vibrations_calculation(
     vib.run()
     vib_energies = vib.get_energies()
     
+    # Get the atoms objects of the displacements.
+    atoms_list = []
+    for disp, atoms_vib in vib.iterdisplace(inplace=True):
+        atoms_vib = atoms_vib.copy()
+        results = filter_results(results=vib.cache[disp.name], properties=properties)
+        atoms_vib.calc = SinglePointCalculator(atoms=atoms_vib, **results)
+        atoms_vib.info["displacement"] = disp.name
+        atoms_list.append(atoms_vib)
+    
     # Write Trajectory files for each displacement.
-    if write_trajs is True:
-        os.makedirs("vib_trajs", exist_ok=True)
-        for disp, atoms in vib.iterdisplace(inplace=True):
-            filename = os.path.join("vib_trajs", "atoms-"+disp.name+".traj")
-            atoms.calc = SinglePointCalculator(atoms=atoms, **vib.cache[disp.name])
-            traj = Trajectory(filename, mode='w', atoms=atoms, properties=properties)
-            traj.write()
+    if save_trajs is True:
+        trajname = os.path.join(directory, f'{label}.traj')
+        with Trajectory(filename=trajname, mode='w') as traj:
+            for atoms_vib in atoms_list[1:]+atoms_list[0:1]:
+                traj.write(atoms_vib, **atoms_vib.calc.results)
     
     # Remove the cache directory with the results of the calculation.
     if remove_cache is True:
         vib.clean()
-        os.rmdir(name)
+        os.rmdir(label)
 
     atoms.info["vib_energies"] = vib_energies
 
-    return vib_energies
+# -------------------------------------------------------------------------------------
+# RUN CALCULATION
+# -------------------------------------------------------------------------------------
+
+def run_calculation(
+    atoms,
+    calc,
+    calculation,
+    **kwargs,
+):
+    """Run calculation."""
+    if calculation == "relax":
+        # Relax calculation.
+        run_relax_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "dimer":
+        # Dimer calculation.
+        run_dimer_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "climbbonds":
+        # Climbbonds calculaton.
+        run_climbbonds_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "climbfixint":
+        # ClimbFixInternals calculaton.
+        run_climbfixint_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "sella":
+        # Sella calculaton.
+        run_sella_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "vibrations":
+        # Vibrations calculaton.
+        run_vibrations_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
 
 # -------------------------------------------------------------------------------------
 # END

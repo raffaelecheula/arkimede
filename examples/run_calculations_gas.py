@@ -5,12 +5,13 @@
 import numpy as np
 from ase.db import connect
 from ase.calculators.vasp.vasp import Vasp
-from arkimede.utils import templates_basedir
+from arkimede.utils import templates_basedir, scripts_basedir
 from arkimede.workflow.utilities import get_atoms_list_from_db
 from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
 from arkimede.workflow.dft_calculations import (
-    write_input_vasp_vib,
-    check_finished_vasp_vib,
+    write_input_asevasp,
+    read_output_asevasp,
+    check_finished_asevasp,
     job_queued_k8s,
 )
 
@@ -30,16 +31,15 @@ def main():
     db_dft_name = "database_gas.db"
     db_dft_append = True
     
-    # Name of the folder for gas vibrations calculations.
-    basedir_dft_calc = "calculations_vib"
+    # Name of the folder for asevasp gas calculations.
+    basedir_dft_calc = "calculations_gas"
     
     # Name of the template yaml file and namespace for kubernetes submission.
     template_yaml = templates_basedir() / "template_k8s.yaml"
     namespace = "raffaelecheula"
     
-    # Filename and name of dft calculation.
-    filename_out = "vib.out"
-    calculation = "vasp-vibrations"
+    # Filename of calculation output.
+    filename_out = "asevasp.out"
 
     # Vasp parameters.
     vasp_flags = {
@@ -59,12 +59,14 @@ def main():
         "xc": "PBE",
     }
     
-    # Setup vasp calculator.
-    calc = Vasp(**vasp_flags)
-    
     # Vasp command.
-    vasp_exe = "/opt/vasp.6.1.2_pgi_mkl_beef/bin/vasp_std"
-    command = f"mpirun -np 8 --map-by hwthread {vasp_exe} > vasp.out"
+    vasp_bin = "/opt/vasp.6.1.2_pgi_mkl_beef/bin/vasp_std"
+    vasp_command = f"{vasp_bin} > vasp.out"
+    
+    # Ase vasp command.
+    asevasp_py = scripts_basedir() / "asevasp.py"
+    conda_command = "source /home/jovyan/.bashrc; conda activate ocp"
+    command = f"{conda_command}; python {asevasp_py} >> asevasp.out"
     
     # ---------------------------------------------------------------------------------
     # RUN DFT CALCULATIONS
@@ -83,20 +85,33 @@ def main():
     # Initialize ase dft database.
     db_dft = connect(name=db_dft_name, append=db_dft_append)
     
+    # Get only molecules of two of more atoms.
+    atoms_list = [atoms for atoms in atoms_list if len(atoms) > 1]
+    
+    # Store calculation settings into atoms.info dictionaries.
+    for atoms in atoms_list:
+        atoms.pbc = True
+        atoms.info["calculation"] = "relax+vibrations"
+        atoms.info["vasp_flags"] = vasp_flags
+        atoms.info["vasp_command"] = vasp_command
+        atoms.info["filename_out"] = filename_out
+        atoms.info["save_trajs"] = True
+        atoms.info["indices"] = list(range(len(atoms)))
+    
     # Run the dft calculations.
     run_dft_calculations_k8s(
         atoms_list=atoms_list,
-        calc=calc,
         template_yaml=template_yaml,
         namespace=namespace,
         basedir_dft_calc=basedir_dft_calc,
         filename_out=filename_out,
-        calculation=calculation,
         db_dft=db_dft,
-        write_input_fun=write_input_vasp_vib,
-        check_finished_fun=check_finished_vasp_vib,
+        write_input_fun=write_input_asevasp,
+        read_output_fun=read_output_asevasp,
+        check_finished_fun=check_finished_asevasp,
         job_queued_fun=job_queued_k8s,
         command=command,
+        write_all_to_db=True,
     )
 
 # -------------------------------------------------------------------------------------

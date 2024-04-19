@@ -21,7 +21,7 @@ def main():
     selection = ""
 
     # Name of ase database to store the results of the calculations.
-    db_ase_name = "database_ocp_2.db"
+    db_ase_name = "database_ocp.db"
     db_ase_append = True
 
     # Calculations parameters.

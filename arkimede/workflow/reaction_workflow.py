@@ -173,7 +173,7 @@ def run_ase_calculations_mechanism(
     from arkimede.workflow.calculations import (
         run_relax_calculation,
         run_neb_calculation,
-        run_TS_search_calculation,
+        run_calculation,
         run_vibrations_calculation,
     )
     from arkimede.workflow.utilities import (
@@ -203,7 +203,6 @@ def run_ase_calculations_mechanism(
                 calc=calc,
                 fmax=fmax,
                 steps_max=steps_max_relax,
-                name='relax',
                 directory=os.path.join(basedir_trajs, atoms.info["name"]),
                 save_trajs=save_trajs,
                 write_images=write_images,
@@ -222,7 +221,6 @@ def run_ase_calculations_mechanism(
                 calc=calc,
                 fmax=fmax,
                 steps_max=steps_max_relax,
-                name='relax',
                 directory=os.path.join(basedir_trajs, atoms.info["name"]),
                 save_trajs=save_trajs,
                 write_images=write_images,
@@ -238,7 +236,6 @@ def run_ase_calculations_mechanism(
                     remove_vib_dir=True,
                 )
             write_atoms_to_db(atoms=atoms, db_ase=db_ase)
-        
         print_results_calculation(atoms=atoms)
 
     # Calculate transition states of the reactions.
@@ -263,7 +260,7 @@ def run_ase_calculations_mechanism(
                     calc=calc,
                     fmax=fmax,
                     steps_max=steps_max_relax,
-                    name=f'relax_{ss}',
+                    label=f'relax_{ss}',
                     directory=directory,
                     save_trajs=save_trajs,
                     write_images=write_images,
@@ -278,7 +275,7 @@ def run_ase_calculations_mechanism(
                 atoms_IS=atoms_IS,
                 atoms_FS=atoms_FS,
                 n_images=n_images_neb,
-                name=None,
+                save_trajs=False,
             )
             run_neb_calculation(
                 images=images,
@@ -289,7 +286,6 @@ def run_ase_calculations_mechanism(
                 use_OCPdyNEB=False,
                 use_NEBOptimizer=True,
                 print_energies=True,
-                name='neb',
                 directory=directory,
                 save_trajs=save_trajs,
                 write_images=write_images,
@@ -305,7 +301,7 @@ def run_ase_calculations_mechanism(
                         calc=calc,
                         fmax=fmax,
                         steps_max=steps_max_relax,
-                        name=f"relax_{ss}",
+                        label=f"relax_{ss}",
                         directory=directory,
                         save_trajs=save_trajs,
                         write_images=write_images,
@@ -323,10 +319,10 @@ def run_ase_calculations_mechanism(
 
             atoms_TS.info["calculation"] = search_TS
             if read_atoms_from_db(atoms=atoms_TS, db_ase=db_ase) is None:
-                run_TS_search_calculation(
+                run_calculation(
                     atoms=atoms_TS,
                     calc=calc,
-                    search_TS=search_TS,
+                    calculation=search_TS,
                     steps_max=steps_max_ts_search,
                     bonds_TS=bonds_TS,
                     fmax=fmax,
@@ -347,7 +343,7 @@ def run_ase_calculations_mechanism(
                             calc=calc,
                             fmax=fmax,
                             steps_max=steps_max_relax,
-                            name=f'relax_{ss}_2',
+                            label=f'relax_{ss}_2',
                             directory=directory,
                             save_trajs=save_trajs,
                             write_images=write_images,
@@ -376,14 +372,13 @@ def run_ase_calculations_mechanism(
 
 def run_dft_calculations_k8s(
     atoms_list,
-    calc,
     template_yaml,
     namespace,
     basedir_dft_calc,
     filename_out,
-    calculation,
     db_dft,
     write_input_fun,
+    read_output_fun,
     check_finished_fun,
     job_queued_fun,
     command=None,
@@ -391,16 +386,15 @@ def run_dft_calculations_k8s(
     cpu_lim=12,
     mem_req='8Gi',
     mem_lim='24Gi',
+    write_all_to_db=False,
+    **kwargs,
 ):
     
+    from arkimede.workflow.dft_calculations import submit_k8s
     from arkimede.workflow.utilities import (
         read_atoms_from_db,
         write_atoms_to_db,
         print_results_calculation,
-    )
-    from arkimede.workflow.dft_calculations import (
-        submit_k8s,
-        read_dft_output,
     )
     
     # Read the template yaml file.
@@ -410,22 +404,20 @@ def run_dft_calculations_k8s(
     # Run the dft calculations.
     cwd = os.getcwd()
     for atoms in atoms_list:
-        atoms.pbc = True
-        atoms.calc = calc
         atoms.info["converged"] = False
-        atoms.info["calculation"] = calculation
         if read_atoms_from_db(atoms=atoms, db_ase=db_dft) is None:
             directory = os.path.join(basedir_dft_calc, atoms.info["name"])
             os.makedirs(directory, exist_ok=True)
             os.chdir(directory)
             if os.path.isfile(filename_out) and check_finished_fun(filename_out):
-                read_dft_output(
-                    atoms=atoms,
-                    filename=filename_out,
-                )
+                atoms_list = read_output_fun(atoms=atoms, **kwargs)
                 if atoms.info["converged"] is True:
                     atoms.set_tags(np.ones(len(atoms)))
                     write_atoms_to_db(atoms=atoms, db_ase=db_dft)
+                    if write_all_to_db is True:
+                        for atom_ii in atoms_list:
+                            atom_ii.set_tags(np.ones(len(atom_ii)))
+                            write_atoms_to_db(atoms=atom_ii, db_ase=db_dft)
             elif job_queued_fun(atoms.info["name"]) is False:
                 write_input_fun(atoms)
                 submit_k8s(
@@ -439,9 +431,7 @@ def run_dft_calculations_k8s(
                     mem_req=mem_req,
                     mem_lim=mem_lim,
                 )
-
             os.chdir(cwd)
-        
         print_results_calculation(atoms=atoms)
 
 # -------------------------------------------------------------------------------------

@@ -34,8 +34,8 @@ def main():
     show_sites = False
     show_gas_init = False
     show_clean_init = False
-    show_ads_init = True
-    show_neb_init = True
+    show_ads_init = False
+    show_neb_init = False
 
     # ---------------------------------------------------------------------------------
     # REACTION MECHANISM PARAMETERS
@@ -54,7 +54,7 @@ def main():
     miller_index_list = [
         "100",
         #"110",
-        #"111",
+        "111",
         #"210",
         #"211",
         #"221",

@@ -7,7 +7,7 @@ from ase import Atoms
 from ase.neb import NEB, idpp_interpolate
 from ase.io import Trajectory
 from ase.optimize import BFGS
-from ase.calculators.singlepoint import SinglePointCalculator
+from ase.calculators.singlepoint import SinglePointCalculator, all_properties
 
 # -------------------------------------------------------------------------------------
 # GET ATOMS FIXED
@@ -58,7 +58,7 @@ def get_idpp_interpolated_images(
     atoms_IS,
     atoms_FS,
     n_images=10,
-    name='idpp',
+    label='idpp',
     fmax=0.005,
     steps_max=1000,
     save_trajs=False,
@@ -80,7 +80,7 @@ def get_idpp_interpolated_images(
         steps=steps_max,
     )
     if save_trajs is True:
-        traj = Trajectory(filename = f'{name}.traj', mode = 'w')
+        traj = Trajectory(filename = f'{label}.traj', mode = 'w')
         for image in images:
             traj.write(image)
 
@@ -318,13 +318,13 @@ def get_status_calculation(atoms):
 def print_results_calculation(atoms):
     """Print results of the calculation to screen."""
     status_str = f'{get_status_calculation(atoms):15s}'
-    if "energy" in atoms.calc.results:
-        energy_str = f'{atoms.calc.results["energy"]:10.3f}'
+    if atoms.calc and "energy" in atoms.calc.results:
+        energy_str = f'{atoms.calc.results["energy"]:15.3f}'
     else:
         energy_str = None
     print(
         f'{atoms.info["name"]:100s}',
-        f'{atoms.info["calculation"]:15s}',
+        f'{atoms.info["calculation"]:20s}',
         status_str,
         energy_str,
     )
@@ -406,6 +406,13 @@ def get_atoms_list_from_db(db_ase, selection, structure_type):
             atoms_list.append(atoms_ii_list)
     
     return atoms_list
+
+# -------------------------------------------------------------------------------------
+# FILTER RESULTS
+# -------------------------------------------------------------------------------------
+
+def filter_results(results, properties=all_properties):
+    return {pp: results[pp] for pp in results if pp in properties}
 
 # -------------------------------------------------------------------------------------
 # END

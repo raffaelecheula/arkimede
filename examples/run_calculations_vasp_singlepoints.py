@@ -11,6 +11,7 @@ from arkimede.utils import templates_basedir
 from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
 from arkimede.workflow.dft_calculations import (
     write_input_vasp,
+    read_output_vasp,
     check_finished_vasp,
     job_queued_k8s,
 )
@@ -38,9 +39,8 @@ def main():
     template_yaml = templates_basedir() / "template_k8s.yaml"
     namespace = "raffaelecheula"
     
-    # Filename and name of dft calculation.
+    # Filename of calculation output.
     filename_out = "OUTCAR"
-    calculation = "vasp-singlepoint"
     
     # Vasp parameters.
     vasp_flags = {
@@ -64,8 +64,8 @@ def main():
     calc = Vasp(**vasp_flags)
     
     # Vasp command.
-    vasp_exe = "/opt/vasp.6.1.2_pgi_mkl_beef/bin/vasp_std"
-    command = f"mpirun -np 8 --map-by hwthread {vasp_exe} > vasp.out"
+    vasp_bin = "/opt/vasp.6.1.2_pgi_mkl_beef/bin/vasp_std"
+    vasp_command = f"mpirun -np 8 --map-by hwthread {vasp_bin} > vasp.out"
     
     # ---------------------------------------------------------------------------------
     # RUN DFT CALCULATIONS
@@ -85,20 +85,24 @@ def main():
     # Initialize ase dft database.
     db_dft = connect(name=db_dft_name, append=db_dft_append)
 
+    for atoms in atoms_list:
+        atoms.pbc = True
+        atoms.calc = calc
+        atoms.info["calculation"] = "vasp-singlepoint"
+
     # Run the dft calculations.
     run_dft_calculations_k8s(
         atoms_list=atoms_list,
-        calc=calc,
         template_yaml=template_yaml,
         namespace=namespace,
         basedir_dft_calc=basedir_dft_calc,
         filename_out=filename_out,
-        calculation=calculation,
         db_dft=db_dft,
         write_input_fun=write_input_vasp,
+        read_output_fun=read_output_vasp,
         check_finished_fun=check_finished_vasp,
         job_queued_fun=job_queued_k8s,
-        command=command,
+        command=vasp_command,
     )
 
 # -------------------------------------------------------------------------------------

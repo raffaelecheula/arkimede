@@ -10,15 +10,15 @@ import numpy as np
 from ase.io import read
 from ase.io import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
+from arkimede.workflow.utilities import filter_results
 
 # -------------------------------------------------------------------------------------
 # GET NAME K8S
 # -------------------------------------------------------------------------------------
 
 def get_name_k8s(name):
-    """Replace forbidden characters in k8s name and add random hex."""
-    import secrets
-    return re.sub('[^0-9a-zA-Z]+', '-', name.lower())+'-'+secrets.token_hex(5)
+    """Replace forbidden characters in k8s name."""
+    return "job-"+re.sub('[^0-9a-zA-Z]+', '-', name.lower())+"-job"
 
 # -------------------------------------------------------------------------------------
 # SUBMIT K8S
@@ -35,7 +35,8 @@ def submit_k8s(
     mem_req='8Gi',
     mem_lim='24Gi',
 ):
-    
+    """Submit a calculation in k8s."""
+
     # Replace forbidden characters in name.
     name_k8s = get_name_k8s(name=name)
     
@@ -65,55 +66,24 @@ def submit_k8s(
     os.system('kubectl apply -f job.yaml > /dev/null')
 
 # -------------------------------------------------------------------------------------
-# RUN RELAX CALCULATION
+# JOB QUEUED K8S
 # -------------------------------------------------------------------------------------
 
-def read_dft_output(
-    atoms,
-    filename="OUTCAR",
-    name="vasp",
-    directory=".",
-    save_trajs=False,
-    write_images=False,
-    update_cell=False,
-    **kwargs,
-):
-    """Read dft output."""
-
-    # Read dft output.
-    atoms_out = read(os.path.join(directory, filename))
-    
-    # Save trajectory.
-    if save_trajs is True:
-        traj = Trajectory(
-            filename=os.path.join(directory, f'{name}.traj'),
-            mode='w',
-        )
-        for atoms in read(os.path.join(directory, filename), ':'):
-            traj.write(atoms)
-    
-    # Update the input atoms with the results.
-    atoms.set_positions(atoms_out.positions)
-    if update_cell is True:
-        atoms.set_cell(atoms_out.cell)
-    atoms.calc = SinglePointCalculator(
-        atoms=atoms,
-        energy=atoms_out.calc.results['energy'],
-        forces=atoms_out.calc.results['forces'],
-    )
-    atoms.info["modified"] = False
-    atoms.info["converged"] = True
-
-    # Write image.
-    if write_images is True:
-        filename = os.path.join(directory, f"{name}.png")
-        atoms.write(filename, radii=0.9, scale=200)
+def job_queued_k8s(name):
+    """Get kubectl jobs sumbitted or running."""
+    name_k8s = get_name_k8s(name=name)
+    output = subprocess.check_output(
+        "kubectl get jobs -o custom-columns=:.metadata.name",
+        shell=True,
+    ).decode("utf-8")
+    return name_k8s in output.split("\n")
 
 # -------------------------------------------------------------------------------------
 # CHECK FILE CONTAINS
 # -------------------------------------------------------------------------------------
 
 def check_file_contains(filename, key_string):
+    """Check if a file contains a string."""
     contains = False
     with open(filename, 'r') as fileobj:
         for line in fileobj.readlines():
@@ -123,11 +93,17 @@ def check_file_contains(filename, key_string):
     return contains
 
 # -------------------------------------------------------------------------------------
-# CHECK FINISHED VASP
+# AUTOMATIC KPTS
 # -------------------------------------------------------------------------------------
 
-def check_finished_vasp(filename, key_string="Total CPU time used"):
-    return check_file_contains(filename=filename, key_string=key_string)
+def automatic_kpts(atoms):
+    """Calculate kpts for a dft calculation."""
+    if atoms.info["structure_type"] == "gas":
+        kpts = (1, 1, 1)
+    elif atoms.info["structure_type"] == "surface":
+        from ocdata.utils.vasp import calculate_surface_k_points
+        kpts = calculate_surface_k_points(atoms)
+    return kpts
 
 # -------------------------------------------------------------------------------------
 # WRITE INPUT VASP
@@ -136,12 +112,9 @@ def check_finished_vasp(filename, key_string="Total CPU time used"):
 def write_input_vasp(atoms, auto_kpts=True):
     """Write input files for vasp calculation."""
     if auto_kpts is True:
-        from ocdata.utils.vasp import calculate_surface_k_points
-        kpts = calculate_surface_k_points(atoms)
-    else:
-        kpts = atoms.info["kpts"]
+        atoms.info["kpts"] = automatic_kpts(atoms)
     # Write vasp input files.
-    atoms.calc.set(kpts=kpts)
+    atoms.calc.set(kpts=atoms.info["kpts"])
     atoms.calc.write_input(atoms=atoms)
     # Write vector for vasp dimer calculation.
     params = atoms.calc.todict()
@@ -149,6 +122,122 @@ def write_input_vasp(atoms, auto_kpts=True):
         write_vector_modecar_vasp(vector=atoms.info["vector"])
     elif params.get("ibrion") == 44:
         write_vector_poscar_vasp(vector=atoms.info["vector"])
+
+# -------------------------------------------------------------------------------------
+# READ OUTPUT VASP
+# -------------------------------------------------------------------------------------
+
+def read_output_vasp(
+    atoms,
+    filename="OUTCAR",
+    label="vasp",
+    directory=".",
+    save_trajs=False,
+    write_images=False,
+    update_cell=False,
+    properties=["energy", "forces"],
+    **kwargs,
+):
+    """Read output of a vasp calculation."""
+
+    # Read all atoms from output.
+    atoms_list = read(os.path.join(directory, filename), ':')
+    atoms_opt = atoms_list[-1]
+    
+    # Save trajectory.
+    if save_trajs is True:
+        trajname = os.path.join(directory, f'{label}.traj')
+        traj = Trajectory(filename=trajname, mode='w')
+        for atoms in read(os.path.join(directory, filename), ':'):
+            traj.write(atoms, **atoms.calc.results)
+    
+    # Update the input atoms with the results.
+    atoms.set_positions(atoms_opt.positions)
+    if update_cell is True:
+        atoms.set_cell(atoms_opt.cell)
+    results = filter_results(results=atoms_opt.calc.results, properties=properties)
+    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
+
+    # Write image.
+    if write_images is True:
+        filename = os.path.join(directory, f"{label}.png")
+        atoms.write(filename, radii=0.9, scale=200)
+
+    # Update info of atoms.
+    for ii, atoms_ii in enumerate(atoms_list):
+        atoms_ii.info = atoms.info.copy()
+        atoms_ii.info["name"] += f"-{ii}"
+
+    # Mark final atoms.
+    atoms.info["modified"] = False
+    atoms.info["converged"] = True
+
+    return atoms_list
+
+# -------------------------------------------------------------------------------------
+# CHECK FINISHED VASP
+# -------------------------------------------------------------------------------------
+
+def check_finished_vasp(filename, key_string="Total CPU time used"):
+    """Check if a vasp calculation has finished."""
+    return check_file_contains(filename=filename, key_string=key_string)
+
+# -------------------------------------------------------------------------------------
+# WRITE INPUT ASEVASP
+# -------------------------------------------------------------------------------------
+
+def write_input_asevasp(atoms, auto_kpts=True):
+    """Write input files for asevasp calculation."""
+    if auto_kpts is True:
+        atoms.info["kpts"] = automatic_kpts(atoms)
+    # Write trajectory file containing all the parameters.
+    atoms.write("asevasp.traj")
+
+# -------------------------------------------------------------------------------------
+# READ OUTPUT ASEVASP
+# -------------------------------------------------------------------------------------
+
+def read_output_asevasp(
+    atoms,
+    directory=".",
+    update_cell=False,
+    properties=["energy", "forces"],
+):
+    """Read output of an asevasp calculation."""
+    
+    # Read all atoms from output.
+    atoms_list = []
+    for calculation in atoms.info["calculation"].split("+"):
+        atoms_list += read(os.path.join(directory, calculation+".traj"), ":")
+    atoms_opt = atoms_list[-1]
+    
+    # Update the input atoms with the results.
+    atoms.set_positions(atoms_opt.positions)
+    if update_cell is True:
+        atoms.set_cell(atoms_opt.cell)
+    results = filter_results(results=atoms_opt.calc.results, properties=properties)
+    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
+    
+    # Update name of atoms.
+    for ii, atoms_ii in enumerate(atoms_list):
+        if "displacement" in atoms_ii.info:
+            atoms_ii.info["name"] += "-"+atoms_ii.info["displacement"]
+        else:
+            atoms_ii.info["name"] += f"-{ii:05d}"
+    
+    # Mark final atoms.
+    atoms.info["modified"] = False
+    atoms.info["converged"] = True
+    
+    return atoms_list
+
+# -------------------------------------------------------------------------------------
+# CHECK FINISHED ASEVASP
+# -------------------------------------------------------------------------------------
+
+def check_finished_asevasp(filename, key_string="all calculations finished"):
+    """Check if an asevasp calculation has finished."""
+    return check_file_contains(filename=filename, key_string=key_string)
 
 # -------------------------------------------------------------------------------------
 # WRITE VECTOR MODECAR VASP
@@ -170,19 +259,6 @@ def write_vector_poscar_vasp(vector):
         print("", file=fileobj)
         for line in vector:
             print("{0:20.10E} {1:20.10E} {2:20.10E}".format(*line), file=fileobj)
-
-# -------------------------------------------------------------------------------------
-# JOB QUEUED K8S
-# -------------------------------------------------------------------------------------
-
-def job_queued_k8s(name):
-    """Get kubectl jobs sumbitted or running."""
-    name_k8s = get_name_k8s(name=name)
-    output = subprocess.check_output(
-        "kubectl get jobs -o custom-columns=:.metadata.name",
-        shell=True,
-    ).decode("utf-8")
-    return name_k8s in output.split("\n")
 
 # -------------------------------------------------------------------------------------
 # END

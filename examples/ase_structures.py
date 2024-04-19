@@ -205,7 +205,6 @@ def get_atoms_slab(
         top = [7, 9, 10, 11]
         bottom = [0, 1, 2, 4]
         atoms_slab.set_surface_atoms(top=top, bottom=bottom)
-        atoms_slab.edit()
 
     if miller_index == "100-110":
         atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [-1, 2]])
@@ -294,6 +293,7 @@ def get_atoms_slab(
         "name": name,
         "name_clean": name,
         "species": "clean",
+        "structure_type": "surface",
         "surf_structure": surf_structure,
         "n_atoms_clean": len(atoms_slab),
         "element_bulk": element_bulk,
@@ -619,6 +619,7 @@ def get_atoms_gas(species, vacuum=12.0):
     atoms_gas.info = {
         "name": species,
         "species": species,
+        "structure_type": "gas",
         "surf_structure": "gas",
         "bonds_surf": bonds_surf,
         "sites_names": sites_names,
