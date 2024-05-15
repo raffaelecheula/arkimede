@@ -1,12 +1,12 @@
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # IMPORTS
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 import numpy as np
 from ase.db import connect
 from ase.calculators.vasp.vasp import Vasp
 from arkimede.utils import templates_basedir, scripts_basedir
-from arkimede.workflow.utilities import get_atoms_list_from_db
+from arkimede.workflow.utilities import get_atoms_list_from_db_metadata
 from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
 from arkimede.workflow.dft_calculations import (
     write_input_asevasp,
@@ -15,9 +15,9 @@ from arkimede.workflow.dft_calculations import (
     job_queued_k8s,
 )
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # ASE VASP VIBRATIONS
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 def main():
 
@@ -76,17 +76,17 @@ def main():
     db_init = connect(name=db_init_name)
 
     # Get lists of atoms from database.
-    atoms_list = get_atoms_list_from_db(
+    atoms_list = get_atoms_list_from_db_metadata(
         db_ase=db_init,
         selection=selection,
-        structure_type="gas",
+        metadata_key="gas",
     )
     
     # Initialize ase dft database.
     db_dft = connect(name=db_dft_name, append=db_dft_append)
     
     # Get only molecules of two of more atoms.
-    atoms_list = [atoms for atoms in atoms_list if len(atoms) > 1]
+    atoms_list = [atoms for atoms in atoms_list if len(atoms) > 2]
     
     # Store calculation settings into atoms.info dictionaries.
     for atoms in atoms_list:

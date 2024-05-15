@@ -267,7 +267,7 @@ def merge_databases(db_name_list, db_new_name):
     """Merge databases into one new database."""
     from ase.db import connect
     
-    db_new = connect(db_new_name)
+    db_new = connect(db_new_name, append=False)
     for ii, db_name in enumerate(db_name_list):
         db_ase = connect(db_name)
         for id in range(1, db_ase.count()+1):

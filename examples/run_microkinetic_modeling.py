@@ -28,7 +28,7 @@ def main():
     vol_flow_rate = 1e-6 # [m^3/s]
     
     # Name of ase database.
-    db_ase_name = "databases/vasp_tot.db"
+    db_ase_name = "databases/ocp_00.db"
 
     # Initialize ase database.
     db_ase = connect(name=db_ase_name)
@@ -200,15 +200,17 @@ def get_Gibbs_energy_from_atoms_list(atoms_list, atoms_clean, temperature):
     ii = np.argmin([atoms.energy for atoms in atoms_list])
     energy = atoms_list[ii].energy-atoms_clean.energy
     vib_energies = [
-        vv for vv in atoms_list[ii].data["vib_energies"]
-        if np.isreal(vv)
+        vv for vv in atoms_list[ii].data["vib_energies"] if np.isreal(vv)
     ]
-    thermo = HarmonicThermo(vib_energies=vib_energies)
-    deltaG = thermo.get_helmholtz_energy(
+    thermo = HarmonicThermo(
+        potentialenergy=energy,
+        vib_energies=vib_energies,
+    )
+    Gibbs_energy = thermo.get_helmholtz_energy(
         temperature=temperature,
         verbose=False,
     )
-    return energy+deltaG
+    return Gibbs_energy
 
 # -------------------------------------------------------------------------------------
 # GET MIKIMOTO NAME FROM SPECIES NAME

@@ -60,7 +60,7 @@ def submit_k8s(
     
     # Write new job.yaml file.
     with open('job.yaml', 'w') as config_file:
-        yaml.dump(params, config_file, default_flow_style = False, width = 1000)
+        yaml.dump(params, config_file, default_flow_style=False, width=1000)
         
     # Submit the job.
     os.system('kubectl apply -f job.yaml > /dev/null')

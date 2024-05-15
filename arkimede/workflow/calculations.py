@@ -52,6 +52,10 @@ def run_relax_calculation(
         trajectory=trajname,
     )
     
+    # Calculate the number of calculator calls.
+    if "counter" in dir(calc):
+        calc.counter = 0
+    
     # Run the calculation.
     try:
         opt.run(fmax=fmax, steps=steps_max)
@@ -68,6 +72,8 @@ def run_relax_calculation(
     atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
+    if "counter" in dir(calc):
+        atoms.info["counter"] = calc.counter
 
     # Write image.
     if write_images is True:
@@ -171,6 +177,10 @@ def run_neb_calculation(
     if print_energies:
         opt.attach(print_energies_obs, interval = 1)
 
+    # Calculate the number of calculator calls.
+    if "counter" in dir(calc):
+        calc.counter = 0
+
     # Run the calculation. The while is to keep NEBOptimizer going when 
     # it fails randomly.
     converged = False
@@ -187,6 +197,8 @@ def run_neb_calculation(
     for atoms in images:
         atoms.info["modified"] = False
         atoms.info["converged"] = bool(converged)
+        if "counter" in dir(calc):
+            atoms.info["counter"] = calc.counter
 
     # Write images.
     if write_images is True:
@@ -213,6 +225,7 @@ def run_dimer_calculation(
     fmax=0.01,
     steps_max=500,
     max_displacement=False,
+    max_forces=20.,
     reset_eigenmode=True,
     sign_bond_dict={'break': +1, 'form': -1},
     properties=["energy", "forces"],
@@ -284,8 +297,18 @@ def run_dimer_calculation(
         def check_displacement():
             displ = np.linalg.norm(atoms_dimer.positions-atoms.positions)
             if displ > max_displacement:
-                opt.max_steps = 0
+                raise RuntimeError("atoms displaced too much")
         opt.insert_observer(function=check_displacement, interval=10)
+    
+    if max_forces:
+        def check_max_forces():
+            if (atoms_dimer.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
+                raise RuntimeError("max force too high")
+        opt.insert_observer(function=check_max_forces, interval=5)
+    
+    # Calculate the number of calculator calls.
+    if "counter" in dir(calc):
+        calc.counter = 0
     
     # Run the calculation.
     try:
@@ -304,6 +327,8 @@ def run_dimer_calculation(
     atoms.info["vector"] = atoms_dimer.eigenmodes[0]
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
+    if "counter" in dir(calc):
+        atoms.info["counter"] = calc.counter
 
     # Write image.
     if write_images is True:
@@ -327,6 +352,7 @@ def run_climbbonds_calculation(
     fmax=0.01,
     steps_max=500,
     max_displacement=None,
+    max_forces=20.,
     atoms_too_close=True,
     properties=["energy", "forces"],
     **kwargs,
@@ -363,14 +389,24 @@ def run_climbbonds_calculation(
         def check_displacement():
             displ = np.linalg.norm(atoms_copy.positions-atoms.positions)
             if displ > max_displacement:
-                opt.max_steps = 0
+                raise RuntimeError("atoms displaced too much")
         opt.insert_observer(function=check_displacement, interval=10)
+    
+    if max_forces:
+        def check_max_forces():
+            if (atoms_copy.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
+                raise RuntimeError("max force too high")
+        opt.insert_observer(function=check_max_forces, interval=5)
     
     if atoms_too_close:
         def check_atoms_too_close():
             if get_atoms_too_close(atoms, return_anomaly=True) is True:
-                opt.max_steps = 0
+                raise RuntimeError("atoms too close")
         opt.insert_observer(function=check_atoms_too_close, interval=10)
+    
+    # Calculate the number of calculator calls.
+    if "counter" in dir(calc):
+        calc.counter = 0
     
     # Run the calculation.
     try:
@@ -388,6 +424,8 @@ def run_climbbonds_calculation(
     atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
+    if "counter" in dir(calc):
+        atoms.info["counter"] = calc.counter
 
     # Write image.
     if write_images is True:
@@ -413,6 +451,7 @@ def run_climbfixint_calculation(
     steps_max=500,
     optB_kwargs={'logfile': '-', 'trajectory': None},
     max_displacement=None,
+    max_forces=20.,
     properties=["energy", "forces"],
     **kwargs,
 ):
@@ -452,8 +491,18 @@ def run_climbfixint_calculation(
         def check_displacement():
             displ = np.linalg.norm(atoms_copy.positions-atoms.positions)
             if displ > max_displacement:
-                opt.max_steps = 0
+                raise RuntimeError("atoms displaced too much")
         opt.insert_observer(function=check_displacement, interval=10)
+    
+    if max_forces:
+        def check_max_forces():
+            if (atoms_copy.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
+                raise RuntimeError("max force too high")
+        opt.insert_observer(function=check_max_forces, interval=5)
+    
+    # Calculate the number of calculator calls.
+    if "counter" in dir(calc):
+        calc.counter = 0
     
     # Run the calculation.
     try:
@@ -471,6 +520,8 @@ def run_climbfixint_calculation(
     atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
+    if "counter" in dir(calc):
+        atoms.info["counter"] = calc.counter
 
     # Write image.
     if write_images is True:
@@ -523,6 +574,10 @@ def run_sella_calculation(
         logfile=logfile,
     )
     
+    # Calculate the number of calculator calls.
+    if "counter" in dir(calc):
+        calc.counter = 0
+    
     # Run the calculation.
     try:
         opt.run(fmax=fmax, steps=steps_max)
@@ -539,6 +594,8 @@ def run_sella_calculation(
     atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     atoms.info["modified"] = False
     atoms.info["converged"] = bool(converged)
+    if "counter" in dir(calc):
+        atoms.info["counter"] = calc.counter
 
     # Write image.
     if write_images is True:

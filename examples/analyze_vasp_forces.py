@@ -33,6 +33,8 @@ def main():
         atoms_row = db_ase.get(id=id)
         atoms = atoms_row.toatoms()
         atoms.info = atoms_row.data
+        max_forces = np.sqrt((atoms.get_forces() ** 2).sum(axis=1).max())
+        print(f'{atoms.info["name"]:100s} {max_forces:7.4f}')
         if forces is None:
             forces = atoms.get_forces()
         else:

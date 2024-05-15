@@ -25,7 +25,7 @@ def main():
     
     # Name of dft databases.
     db_name_list = [f"databases/vasp_{ii:02d}.db" for ii in range(step_actlearn+1)]
-    db_name_list.append("databases/vasp_gas.db")
+    #db_name_list.append("databases/vasp_gas.db")
     
     # Merge databases into one total database.
     db_tot_name = "databases/vasp_tot.db"
@@ -47,20 +47,15 @@ def main():
     config_yaml = f"{directory}/config.yml"
     output = f"{directory}/{identifier}.txt"
     
-    # Update active learning step.
-    #step_actlearn += 1
-    #write_step_actlearn(filename=filename_actlearn, step=step_actlearn)
-    
     # Split the database into train, test (optional), and val databases.
     split_database(
         db_ase_name=db_tot_name,
         fractions=(0.8, 0.2),
         filenames=("train.db", "val.db"),
         directory=directory,
-        seed=42,
+        seed=step_actlearn*42,
         change_energy_ref_fun=None,
     )
-    exit()
     
     # Update config file.
     delete_keys = [
@@ -116,6 +111,10 @@ def main():
     if output is not None:
         command += f" > {output} 2>&1"
     os.system(command)
+
+    # Update active learning step.
+    step_actlearn += 1
+    write_step_actlearn(filename=filename_actlearn, step=step_actlearn)
 
 # -------------------------------------------------------------------------------------
 # IF NAME MAIN

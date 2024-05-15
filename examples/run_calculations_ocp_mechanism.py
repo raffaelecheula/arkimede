@@ -4,7 +4,10 @@
 
 from ase.db import connect
 from arkimede.workflow.reaction_workflow import run_ase_calculations_mechanism
-from arkimede.workflow.utilities import get_atoms_list_from_db, read_step_actlearn
+from arkimede.workflow.utilities import (
+    get_atoms_list_from_db_metadata,
+    read_step_actlearn,
+)
 from arkimede.ocp.ocp_utils import get_checkpoint_path, get_checkpoint_path_actlearn
 from arkimede.ocp.ocp_calc import OCPCalculatorCounter
 
@@ -23,7 +26,6 @@ def main():
 
     # Select atoms from the ase database.
     selection = ""
-    #selection += "surf_structure=fcc-Rh-100"
 
     # Name of ase database to store the results of the calculations.
     db_ase_name = f"databases/ocp_{step_actlearn:02d}.db"
@@ -58,20 +60,20 @@ def main():
     db_init = connect(name=db_init_name)
 
     # Get lists of atoms from database.
-    atoms_clean_tot = get_atoms_list_from_db(
+    atoms_clean_tot = get_atoms_list_from_db_metadata(
         db_ase=db_init,
         selection=selection,
-        structure_type="clean",
+        metadata_key="clean",
     )
-    atoms_ads_tot = get_atoms_list_from_db(
+    atoms_ads_tot = get_atoms_list_from_db_metadata(
         db_ase=db_init,
         selection=selection,
-        structure_type="adsorbates",
+        metadata_key="adsorbates",
     )
-    atoms_neb_tot = get_atoms_list_from_db(
+    atoms_neb_tot = get_atoms_list_from_db_metadata(
         db_ase=db_init,
         selection=selection,
-        structure_type="reactions",
+        metadata_key="reactions",
     )
     
     # Initialize ase dft database.

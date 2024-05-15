@@ -46,7 +46,12 @@ def get_atoms_not_fixed(atoms, return_mask=False):
 
 def get_atoms_not_surface(atoms, return_mask=False):
     """Get atoms with index higher than n_atoms_clean."""
-    indices = list(range(len(atoms)))[atoms.info["n_atoms_clean"]:]
+    if "indices_ads" in atoms.info:
+        indices = atoms.info["indices_ads"]
+    elif "n_atoms_clean" in atoms.info:
+        indices = list(range(len(atoms)))[atoms.info["n_atoms_clean"]:]
+    else:
+        raise RuntimeError("Cannot calculate atoms not surface.")
     if return_mask:
         return [True if ii in indices else False for ii in range(len(atoms))]
     else:
@@ -229,48 +234,51 @@ def get_new_IS_and_FS_from_atoms_TS(
     return atoms_IS_new, atoms_FS_new
 
 # -------------------------------------------------------------------------------------
-# WRITE ATOMS TO DATABASE
+# WRITE ATOMS TO DB
 # -------------------------------------------------------------------------------------
 
-def write_atoms_to_db(atoms, db_ase):
+def write_atoms_to_db(
+    atoms,
+    db_ase,
+    keys_match=["name", "calculation"],
+    keys_store=["name", "calculation", "species", "surf_structure"],
+):
     """Write atoms to ase database."""
-    name = atoms.info["name"]
-    calculation = atoms.info["calculation"]
+    kwargs_match = {}
+    for key in keys_match:
+        kwargs_match[key] = atoms.info[key]
+    kwargs_store = {}
+    for key in keys_store:
+        kwargs_store[key] = atoms.info[key]
     status = get_status_calculation(atoms)
-    species = atoms.info["species"]
-    surf_structure = atoms.info["surf_structure"]
-    if db_ase.count(name=name, calculation=calculation) == 0:
+    if db_ase.count(**kwargs_match) == 0:
         db_ase.write(
             atoms=Atoms(atoms),
-            name=name,
-            calculation=calculation,
-            status=status,
-            species=species,
-            surf_structure=surf_structure,
             data=atoms.info,
+            status=status,
+            **kwargs_store,
         )
-    elif db_ase.count(name=name, calculation=calculation) == 1:
-        row_id = db_ase.get(name=name, calculation=calculation).id
+    elif db_ase.count(**kwargs_match) == 1:
+        row_id = db_ase.get(**kwargs_match).id
         db_ase.update(
             id=row_id,
             atoms=Atoms(atoms),
-            calculation=calculation,
-            status=status,
-            species=species,
-            surf_structure=surf_structure,
             data=atoms.info,
+            status=status,
+            **kwargs_store,
         )
 
 # -------------------------------------------------------------------------------------
 # READ ATOMS FROM DATABASE
 # -------------------------------------------------------------------------------------
 
-def read_atoms_from_db(atoms, db_ase):
+def read_atoms_from_db(atoms, db_ase, keys_match=["name", "calculation"]):
     """Read atoms from ase database."""
-    name = atoms.info["name"]
-    calculation = atoms.info["calculation"]
-    if db_ase.count(name=name, calculation=calculation) == 1:
-        atoms_row = db_ase.get(name=name, calculation=calculation)
+    kwargs_match = {}
+    for key in keys_match:
+        kwargs_match[key] = atoms.info[key]
+    if db_ase.count(**kwargs_match) == 1:
+        atoms_row = db_ase.get(**kwargs_match)
         info = atoms_row.data.copy()
         info.update(atoms_row.key_value_pairs)
         atoms.info.update(info)
@@ -337,9 +345,9 @@ def print_results_calculation(atoms):
 
 def update_info_TS(atoms_TS, atoms_IS, atoms_FS):
     """Update positions of relaxed clean slab."""
-    species = "→".join([atoms_IS.info["species"], atoms_FS.info["species"]])
-    site_id = "→".join([atoms_IS.info["site_id"], atoms_FS.info["site_id"]])
-    name_TS = "_".join([atoms_IS.info["surface_name"], species, site_id])
+    species = "→".join([str(atoms_IS.info["species"]), str(atoms_FS.info["species"])])
+    site_id = "→".join([str(atoms_IS.info["site_id"]), str(atoms_FS.info["site_id"])])
+    name_TS = "_".join([str(atoms_IS.info["surface_name"]), species, site_id])
     atoms_TS.info["species"] = species
     atoms_TS.info["site_id"] = site_id
     atoms_TS.info["name"] = name_TS
@@ -387,10 +395,33 @@ def get_names_metadata(
 # GET ATOMS LIST FROM DB
 # -------------------------------------------------------------------------------------
 
-def get_atoms_list_from_db(db_ase, selection, structure_type):
+def get_atoms_list_from_db(db_ase, selection="", **kwargs):
     
     atoms_list = []
-    for name in db_ase.metadata[structure_type]:
+    for id in [aa.id for aa in db_ase.select(selection=selection, **kwargs)]:
+        atoms_row = db_ase.get(id=id)
+        atoms = atoms_row.toatoms()
+        atoms.info = atoms_row.data
+        atoms_list.append(atoms)
+
+    return atoms_list
+
+# -------------------------------------------------------------------------------------
+# GET ATOMS LIST FROM DB
+# -------------------------------------------------------------------------------------
+
+def get_atoms_min_energy(atoms_list):
+    ii = np.argmin([atoms.get_potential_energy() for atoms in atoms_list])
+    return atoms_list[ii]
+
+# -------------------------------------------------------------------------------------
+# GET ATOMS LIST FROM DB METADATA
+# -------------------------------------------------------------------------------------
+
+def get_atoms_list_from_db_metadata(db_ase, selection, metadata_key):
+    
+    atoms_list = []
+    for name in db_ase.metadata[metadata_key]:
         if isinstance(name, str):
             selection_new = ",".join([selection, f"name={name}"])
             atoms_row = db_ase.get(selection=selection_new)

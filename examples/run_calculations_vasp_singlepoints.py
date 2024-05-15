@@ -32,7 +32,6 @@ def main():
 
     # Select atoms from the ase database.
     selection = "status=finished,"
-    selection += "surf_structure=fcc-Rh-100,"
     
     # Name of ase dft database to store the results of the dft calculations.
     db_dft_name = f"databases/vasp_{step_actlearn:02d}.db"

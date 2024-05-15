@@ -2,7 +2,9 @@
 # IMPORTS
 # -------------------------------------------------------------------------------------
 
+import os
 import numpy as np
+import matplotlib.pyplot as plt
 from ase.db import connect
 from ase.gui.gui import GUI
 from arkimede.workflow.utilities import get_atoms_list_from_db
@@ -13,10 +15,6 @@ from arkimede.workflow.utilities import get_atoms_list_from_db
 
 def main():
     
-    # Control parameters.
-    delete_selection = False
-    show_selection = False
-    
     # Active learning step.
     step_actlearn = 0
     
@@ -26,27 +24,38 @@ def main():
     # Select atoms from the database.
     calculation = "climbbonds"
     selection = ""
-    selection += f"calculation={calculation},"
-    #selection += f"status=unfinished,"
-    #selection += "surf_structure=fcc-Rh-111,"
+    selection += "status=finished,"
+    selection += "surf_structure=fcc-Rh-100,"
     
     # Initialize ase database.
     db_ase = connect(name=db_name)
 
-    # Print number of selected atoms.
-    selected = list(db_ase.select(selection=selection))
-    print(f"number of calculations:", len(selected))
-    selected = list(db_ase.select(selection=f"{selection},status=finished"))
-    print(f"number of converged:", len(selected))
-    
-    atoms_list = get_atoms_list_from_db(db_ase=db_ase, selection=selection)
-    
-    if delete_selection is True:
-        db_ase.delete([aa.id for aa in db_ase.select(selection=selection)])
-    
-    if show_selection is True and len(atoms_list) > 0:
-        gui = GUI(atoms_list)
-        gui.run()
+    reaction_dict = {}
+    selection_ts = f"{selection},calculation={calculation}"
+    for atoms in get_atoms_list_from_db(db_ase=db_ase, selection=selection_ts):
+        species = atoms.info["species"]
+        name_clean = atoms.info["name_clean"]
+        selection_cl = f"{selection},name={name_clean}"
+        atoms_clean = get_atoms_list_from_db(db_ase=db_ase, selection=selection_cl)[0]
+        energy_clean = atoms_clean.get_potential_energy()
+        images_energies = atoms.info["images_energies"]
+        energy_IS = images_energies[0]-energy_clean
+        energy_FS = images_energies[-1]-energy_clean
+        energy_TS = atoms.get_potential_energy()-energy_clean
+        if energy_TS < energy_IS or energy_TS < energy_FS:
+            energy_TS = max(energy_IS, energy_FS)
+        energies = [energy_IS, energy_IS, energy_TS, energy_TS, energy_FS, energy_FS]
+        if species in reaction_dict:
+            reaction_dict[species].append(energies)
+        else:
+            reaction_dict[species] = [energies]
+
+    os.makedirs("figures", exist_ok=True)
+    for ii, reaction in enumerate(reaction_dict):
+        energies = reaction_dict[reaction]
+        plt.figure(ii)
+        plt.plot(np.array(energies).T)
+        plt.savefig(f"figures/figure_{reaction}.png")
 
 # -------------------------------------------------------------------------------------
 # IF NAME MAIN
