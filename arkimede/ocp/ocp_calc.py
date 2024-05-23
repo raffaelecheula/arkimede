@@ -2,7 +2,22 @@
 # IMPORTS
 # -------------------------------------------------------------------------------------
 
+import numpy as np
 from ocpmodels.common.relaxation.ase_utils import OCPCalculator
+
+# -------------------------------------------------------------------------------------
+# CALCULATOR COUNTER
+# -------------------------------------------------------------------------------------
+
+class CalculatorCounter(object):
+        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.counter = 0
+    
+    def calculate(self, **kwargs):
+        super().calculate(**kwargs)
+        self.counter += 1
 
 # -------------------------------------------------------------------------------------
 # OCP CALCULATOR COUNTER
@@ -10,28 +25,16 @@ from ocpmodels.common.relaxation.ase_utils import OCPCalculator
 
 class OCPCalculatorCounter(OCPCalculator):
         
-    def __init__(
-        self,
-        config_yml=None,
-        checkpoint_path=None,
-        trainer=None,
-        cutoff=6,
-        max_neighbors=50,
-        cpu=True,
-    ):
-        super().__init__(
-            config_yml=config_yml,
-            checkpoint_path=checkpoint_path,
-            trainer=trainer,
-            cutoff=cutoff,
-            max_neighbors=max_neighbors,
-            cpu=cpu,
-        )
+    def __init__(self, adjust_sum_force=False, **kwargs):
+        super().__init__(**kwargs)
+        self.adjust_sum_force = adjust_sum_force
         self.counter = 0
     
     def calculate(self, atoms, properties, system_changes):
-        self.counter += 1
         super().calculate(atoms, properties, system_changes)
+        if self.adjust_sum_force is True:
+            self.results["forces"] -= self.results["forces"].mean(axis=0)
+        self.counter += 1
 
 # -------------------------------------------------------------------------------------
 # END

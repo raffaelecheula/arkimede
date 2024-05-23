@@ -18,7 +18,7 @@ vasp_flags = atoms.info["vasp_flags"]
 kpts = atoms.info["kpts"]
 filename_out = atoms.info["filename_out"]
 
-# Setup vasp calculator.
+# Setup vasp calculator and run the calculations.
 with VaspInteractive(**vasp_flags, kpts=kpts) as calc:
     for calculation in atoms.info["calculation"].split("+"):
         key_string = calculation+" calculation finished"

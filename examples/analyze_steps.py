@@ -25,7 +25,7 @@ def main():
     calculation = "climbbonds"
     selection = ""
     selection += "status=finished,"
-    selection += "surf_structure=fcc-Rh-100,"
+    selection += "name_ref=fcc-Rh-100,"
     
     # Initialize ase database.
     db_ase = connect(name=db_name)
@@ -34,9 +34,9 @@ def main():
     selection_ts = f"{selection},calculation={calculation}"
     for atoms in get_atoms_list_from_db(db_ase=db_ase, selection=selection_ts):
         species = atoms.info["species"]
-        name_clean = atoms.info["name_clean"]
-        selection_cl = f"{selection},name={name_clean}"
-        atoms_clean = get_atoms_list_from_db(db_ase=db_ase, selection=selection_cl)[0]
+        name_ref = atoms.info["name_ref"]
+        selection_ref = f"{selection},name={name_ref}"
+        atoms_clean = get_atoms_list_from_db(db_ase=db_ase, selection=selection_ref)[0]
         energy_clean = atoms_clean.get_potential_energy()
         images_energies = atoms.info["images_energies"]
         energy_IS = images_energies[0]-energy_clean

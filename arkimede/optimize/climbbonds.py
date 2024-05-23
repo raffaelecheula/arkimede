@@ -16,10 +16,10 @@ class ClimbBonds(FixConstraint):
     def __init__(
         self,
         bonds,
-        ftol = 1e-8,
-        rtol = 1e-5,
-        atol = 1e-8,
-        t_bound = 1e+9,
+        ftol=1e-8,
+        rtol=1e-5,
+        atol=1e-8,
+        t_bound=1e+9,
     ):
         self.bonds = np.asarray([bond[:2] for bond in bonds])
         self.ftol = ftol
@@ -56,12 +56,12 @@ class ClimbBonds(FixConstraint):
             return dforces.flatten()
 
         solver = LSODA(
-            fun = get_dforces,
-            t0 = 0.,
-            y0 = forces.flatten(),
-            rtol = self.rtol,
-            atol = self.atol,
-            t_bound = self.t_bound,
+            fun=get_dforces,
+            t0=0.,
+            y0=forces.flatten(),
+            rtol=self.rtol,
+            atol=self.atol,
+            t_bound=self.t_bound,
         )
         while solver.status != 'finished':
             solver.step()

@@ -651,7 +651,7 @@ def cut_surface(
     
     # Translate and repeat the atoms.
     atoms.translate([*np.dot(translate, cell_2d), 0.])
-    atoms *= repeat
+    atoms *= [int(ii) for ii in np.ceil(repeat)]
     atoms.set_cell(cell_new)
     
     # Delete atoms outside the cell.

@@ -5,10 +5,12 @@
 import os
 import numpy as np
 from ase.io import Trajectory
+from ase.optimize import BFGS, LBFGS, ODE12r
+from ase.neb import NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
 from arkimede.workflow.utilities import (
-    get_atoms_not_fixed,
-    get_atoms_not_surface,
+    get_indices_not_fixed,
+    get_indices_adsorbate,
     filter_results,
     get_atoms_too_close,
 )
@@ -28,11 +30,12 @@ def run_relax_calculation(
     save_trajs=False,
     write_images=False,
     update_cell=False,
+    optimizer=BFGS,
+    kwargs_opt={},
     properties=["energy", "forces"],
     **kwargs,
 ):
     """Run a relax calculation."""
-    from ase.optimize import BFGS
 
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
@@ -43,13 +46,14 @@ def run_relax_calculation(
     if save_trajs is True:
         trajname = os.path.join(directory, f'{label}.traj')
 
-    # Setup the BFGS solver.
+    # Setup the optimizer.
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
-    opt = BFGS(
+    opt = optimizer(
         atoms=atoms_copy,
         logfile=logfile,
         trajectory=trajname,
+        **kwargs_opt,
     )
     
     # Calculate the number of calculator calls.
@@ -96,7 +100,8 @@ def run_neb_calculation(
     write_images=False,
     logfile='-',
     use_OCPdyNEB=False,
-    use_NEBOptimizer=False,
+    optimizer=NEBOptimizer,
+    kwargs_opt={},
     activate_climb=True,
     print_energies=True,
     ftres_climb=0.10,
@@ -146,36 +151,31 @@ def run_neb_calculation(
                 forces=images[ii].calc.results["forces"],
             )
     
-    # Choose optimizer.
-    if use_NEBOptimizer:
-        from ase.neb import NEBOptimizer
-        opt = NEBOptimizer(neb, logfile=logfile)
-    else:
-        from ase.optimize import BFGS
-        opt = BFGS(neb, logfile=logfile)
+    # Setup optimizer.
+    opt = optimizer(neb, logfile=logfile, **kwargs_opt)
     
-    def activate_climb_obs(neb = neb, ftres = ftres_climb):
+    def activate_climb_obs(neb=neb, ftres=ftres_climb):
         if neb.get_residual() < ftres:
             neb.climb = True
     
-    def print_energies_obs(neb = neb, opt = opt, print_path_energies = True):
+    def print_energies_obs(neb=neb, opt=opt, print_path_energies=True):
         fres = neb.get_residual()
-        print(f'Step: {opt.nsteps:4d} Fmax: {fres:9.4f}', end = '  ')
+        print(f'Step: {opt.nsteps:4d} Fmax: {fres:9.4f}', end='  ')
         for ii in (0, -1):
             neb.energies[ii] = images[ii].calc.results['energy']
         act_energy = max(neb.energies)-neb.energies[0]
-        print(f'Eact: {act_energy:+9.4f} eV', end = '  ')
+        print(f'Eact: {act_energy:+9.4f} eV', end='  ')
         if print_path_energies is True:
-            print(f'Epath:', end = '  ')
+            print(f'Epath:', end='  ')
             for energy in neb.energies:
-                print(f'{energy-neb.energies[0]:+9.4f}', end = ' ')
+                print(f'{energy-neb.energies[0]:+9.4f}', end=' ')
             print('eV')
 
     # Attach observers.
     if activate_climb:
-        opt.attach(activate_climb_obs, interval = 1)
+        opt.attach(activate_climb_obs, interval=1)
     if print_energies:
-        opt.attach(print_energies_obs, interval = 1)
+        opt.attach(print_energies_obs, interval=1)
 
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
@@ -248,7 +248,7 @@ def run_dimer_calculation(
         vector = atoms.info.get("vector").copy()
 
     atoms.calc = calc
-    mask = get_atoms_not_fixed(atoms, return_mask=True)
+    mask = get_indices_not_fixed(atoms, return_mask=True)
     
     dimer_control = DimerControl(
         initial_eigenmode_method='displacement',
@@ -283,7 +283,7 @@ def run_dimer_calculation(
     # Maybe there is a better way of doing this (e.g., selecting the 
     # eigenmode most similar to the directions of the ts bonds).
     if bonds_TS and reset_eigenmode:
-        def reset_eigenmode_obs(atoms_dimer = atoms_dimer):
+        def reset_eigenmode_obs(atoms_dimer=atoms_dimer):
             vector = get_vector_from_bonds_TS(
                 atoms=atoms_dimer,
                 bonds_TS=bonds_TS,
@@ -354,12 +354,13 @@ def run_climbbonds_calculation(
     max_displacement=None,
     max_forces=20.,
     atoms_too_close=True,
+    optimizer=ODE12r,
+    kwargs_opt={},
     properties=["energy", "forces"],
     **kwargs,
 ):
     """Run a climbbonds calculation."""
     from arkimede.optimize.climbbonds import ClimbBonds
-    from ase.optimize.ode import ODE12r
     
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
@@ -373,15 +374,22 @@ def run_climbbonds_calculation(
     # Create a copy of the atoms object to not mess with constraints.
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
-    atoms_copy.set_constraint(
-        atoms_copy.constraints+[ClimbBonds(bonds = bonds_TS)]
-    )
+    atoms_copy.set_constraint(atoms_copy.constraints+[ClimbBonds(bonds=bonds_TS)])
 
-    # We use an ODE solver to improve convergence.
-    opt = ODE12r(
+    # TODO:
+    #from arkimede.optimize.climbbonds import AdaptiveBFGS
+    #optimizer = AdaptiveBFGS
+    #kwargs_opt = {}
+    #from ase.optimize.sciopt import SciPyFminCG
+    #optimizer = SciPyFminCG
+    #kwargs_opt = {}
+
+    # Setup the optimizer.
+    opt = optimizer(
         atoms=atoms_copy,
         logfile=logfile,
         trajectory=trajname,
+        **kwargs_opt,
     )
     
     # Observer that checks the displacement of the ts from the starting position.
@@ -396,11 +404,11 @@ def run_climbbonds_calculation(
         def check_max_forces():
             if (atoms_copy.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
                 raise RuntimeError("max force too high")
-        opt.insert_observer(function=check_max_forces, interval=5)
+        opt.insert_observer(function=check_max_forces, interval=10)
     
     if atoms_too_close:
         def check_atoms_too_close():
-            if get_atoms_too_close(atoms, return_anomaly=True) is True:
+            if get_atoms_too_close(atoms_copy, return_anomaly=True) is True:
                 raise RuntimeError("atoms too close")
         opt.insert_observer(function=check_atoms_too_close, interval=10)
     
@@ -415,6 +423,10 @@ def run_climbbonds_calculation(
     except Exception as error:
         print(error)
         converged = False
+    
+    # TODO:
+    #print(calc.counter)
+    #exit()
     
     # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
@@ -561,7 +573,7 @@ def run_sella_calculation(
 
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
-    indices = get_atoms_not_fixed(atoms_copy, return_mask=False)
+    indices = get_indices_not_fixed(atoms_copy, return_mask=False)
     
     atoms_copy.constraints = []
     constraints = Constraints(atoms_copy)
@@ -609,7 +621,7 @@ def run_sella_calculation(
 def run_vibrations_calculation(
     atoms,
     calc,
-    indices="not_surface",
+    indices="adsorbate",
     label="vibrations",
     delta=0.01,
     nfree=2,
@@ -623,10 +635,10 @@ def run_vibrations_calculation(
     from ase.vibrations import Vibrations
     
     # Get indices of atoms to vibrate.
-    if indices == "not_surface":
-        indices = get_atoms_not_surface(atoms)
+    if indices == "adsorbate":
+        indices = get_indices_adsorbate(atoms)
     elif indices == "not_fixed":
-        indices = get_atoms_not_fixed(atoms)
+        indices = get_indices_not_fixed(atoms)
     
     # Create directory to store the results.
     if save_trajs is True:

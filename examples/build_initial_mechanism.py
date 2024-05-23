@@ -2,10 +2,11 @@
 # IMPORTS
 # -------------------------------------------------------------------------------------
 
+import os
 import numpy as np
 from ase.gui.gui import GUI
 from ase.db import connect
-from arkimede.workflow.utilities import write_atoms_to_db, get_names_metadata
+from arkimede.workflow.utilities import write_atoms_to_db, get_db_metadata
 from arkimede.workflow.reaction_workflow import MechanismCalculator
 
 # -------------------------------------------------------------------------------------
@@ -22,13 +23,10 @@ def main():
     auto_construct = True
     delta_ncoord = 1
 
-    # Sites and reactions parameters.
+     # Sites and reactions parameters.
     range_edges_fun = lambda lc: [1e-2, lc + 1e-2]
     displ_max_fun = lambda lc: lc * np.sqrt(2.0) / 4.0 + 1e-3
-    range_coads_fun = lambda lc: [
-        lc * np.sqrt(2.0) / 3.0 + 1e-3,
-        lc * np.sqrt(2.0) / 2.0 + 1e-3,
-    ]
+    range_coads_fun = lambda lc: [lc * 0.4 + 1e-3, lc * 0.8 + 1e-3]
 
     # Show initial structures.
     show_sites = False
@@ -194,10 +192,11 @@ def main():
     ]
     
     # Initialize ase database.
+    os.makedirs(os.path.split(db_init_name)[0], exist_ok=True)
     db_init = connect(name=db_init_name, append=db_init_append)
     
     # Store structures names as metadata in the database.
-    db_init.metadata = get_names_metadata(
+    db_init.metadata = get_db_metadata(
         atoms_gas_tot=atoms_gas_tot,
         atoms_clean_tot=atoms_clean_tot,
         atoms_ads_tot=atoms_ads_tot,

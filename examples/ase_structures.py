@@ -14,19 +14,12 @@ from arkimede.catkit.utils.connectivity import get_connectivity
 # -------------------------------------------------------------------------------------
 
 lattice_const_dict = {
-    "Co": 3.55,
-    "Cu": 3.68,
-    "Pd": 3.98,
-    "Rh": 3.87,
-    "Pd": 3.97,
-    "Ag": 4.20,
-    "Au": 4.20,
-    "Ni": 3.53,
-    "Pt": 3.98,
-    "Ru": 3.82,
-    "Os": 3.86,
-    "Zn": 2.66,
-    "Ga": 4.52,
+    "Rh": 3.81,
+    "Cu": 3.58,
+    "Mn": 3.47,
+    "Co": 3.51,
+    "Ni": 3.48,
+    "Fe": 3.66,
 }
 
 # Materials parameters.
@@ -54,7 +47,6 @@ repetitions_dict = {
 # GET ATOMS SLAB
 # -------------------------------------------------------------------------------------
 
-
 def get_atoms_slab(
     element_bulk,
     miller_index,
@@ -63,140 +55,129 @@ def get_atoms_slab(
     bulk_structure="fcc",
     lattice_const=None,
     repetitions=None,
-    magnetic_elements=("Co", "Ni", "Fe"),
-    vacuum=10.0,
+    vacuum=12.0,
     delta_ncoord=0,
 ):
 
+    # Initialize parameters.
     if repetitions is None:
         repetitions = repetitions_dict[miller_index]
-
     if lattice_const is None:
         lattice_const = lattice_const_dict[element_bulk]
+    if element_dopant in (None, element_bulk) or number_dopant == 0:
+        number_dopant = 0
+        element_dopant = None
 
+    # Get parameters from miller index.
     if miller_index == "100":
         layers = 4
         miller = (1, 0, 0)
         fixed = 2
         orthogonal = False
-
     elif miller_index == "110":
         layers = 6
         miller = (1, 1, 0)
         fixed = 2
         orthogonal = True
-
     elif miller_index == "111":
         layers = 4
         miller = (1, 1, 1)
         fixed = 2
         orthogonal = False
-
     elif miller_index == "210":
         layers = 9
         miller = (2, 1, 0)
         fixed = 3
         orthogonal = True
-
     elif miller_index == "211":
-        layers = 9 # 12
+        layers = 9
         miller = (2, 1, 1)
-        fixed = 3 # 6
+        fixed = 3
         orthogonal = True
-
     elif miller_index == "221":
         layers = 12
         miller = (2, 2, 1)
         fixed = 4
         orthogonal = True
-
     elif miller_index == "310":
         layers = 12
         miller = (3, 1, 0)
         fixed = 4
         orthogonal = True
-    
     elif miller_index == "320":
         layers = 15
         miller = (3, 2, 0)
         fixed = 5
         orthogonal = True
-    
     elif miller_index == "311":
-        layers = 6 # 8
+        layers = 6
         miller = (3, 1, 1)
-        fixed = 2 # 4
+        fixed = 2
         orthogonal = True
-    
     elif miller_index == "321":
         layers = 15
         miller = (3, 2, 1)
         fixed = 5
         orthogonal = True
-    
     elif miller_index == "331":
         layers = 9
         miller = (3, 3, 1)
         fixed = 3
         orthogonal = True
-
     elif miller_index == "511":
         layers = 9
         miller = (5, 1, 1)
         fixed = 3
         orthogonal = True
-
     elif miller_index == "100-100":
         layers = 7
         miller = (1, 1, 0)
         fixed = 3
         orthogonal = True
-
     elif miller_index == "100-110":
         layers = 9
         miller = (2, 1, 0)
         fixed = 3
         orthogonal = True
-
     elif miller_index == "100-111":
         layers = 7
         miller = (1, 3, 1)
         fixed = 4
         orthogonal = True
-
     elif miller_index == "110-111":
         layers = 9
         miller = (3, 3, 1)
         fixed = 3
         orthogonal = True
-
     elif miller_index == "111-111":
         layers = 7
         miller = (1, 1, 0)
         fixed = 3
         orthogonal = True
 
-    a_init = 1.0
+    # Get bulk structure.
     atoms_bulk = bulk(
-        name="X",
-        a=a_init,
+        name=element_bulk,
+        a=lattice_const,
         crystalstructure=bulk_structure,
         primitive=True,
     )
     atoms_bulk.info["name"] = "-".join([bulk_structure, element_bulk])
 
+    # Get surface structure.
     atoms_slab = surface(
         bulk=atoms_bulk,
         size=(1, 1, layers),
         miller=miller,
         termination=0,
         fixed=fixed,
-        vacuum=vacuum / 2.0,
+        vacuum=vacuum/2.0,
         orthogonal=orthogonal,
         attach_graph=True,
         delta_ncoord=delta_ncoord,
     )
 
+    # Remove atoms to create interfaces.
     if miller_index == "100-100":
         atoms_slab = cut_surface(atoms_slab, vectors=[[2, 0], [0, 1]])
         atoms_slab = reorder_surface(atoms_slab)
@@ -205,7 +186,7 @@ def get_atoms_slab(
         top = [7, 9, 10, 11]
         bottom = [0, 1, 2, 4]
         atoms_slab.set_surface_atoms(top=top, bottom=bottom)
-
+        atoms_slab.edit()
     if miller_index == "100-110":
         atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [-1, 2]])
         atoms_slab = reorder_surface(atoms_slab)
@@ -217,14 +198,12 @@ def get_atoms_slab(
             top += [9, 11]
             bottom += [3, 6]
         atoms_slab.set_surface_atoms(top=top, bottom=bottom)
-
     elif miller_index == "100-111":
         atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [-1, 2]])
         atoms_slab = reorder_surface(atoms_slab)
         del atoms_slab[[1, 12]]
         atoms_slab.set_constraint(FixAtoms(indices=[0, 1, 2, 4]))
         atoms_slab.set_surface_atoms(top=[7, 9, 10, 11], bottom=[0, 1, 2, 4])
-
     elif miller_index == "110-111":
         atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [-1, 2]])
         atoms_slab = reorder_surface(atoms_slab)
@@ -236,7 +215,6 @@ def get_atoms_slab(
             top += [10, 12]
             bottom += [4, 6]
         atoms_slab.set_surface_atoms(top=top, bottom=bottom)
-
     elif miller_index == "111-111":
         atoms_slab = cut_surface(atoms_slab, vectors=[[1, 0], [0, 2]])
         atoms_slab = reorder_surface(atoms_slab)
@@ -249,21 +227,12 @@ def get_atoms_slab(
             bottom += [4]
         atoms_slab.set_surface_atoms(top=top, bottom=bottom)
 
-    atoms_slab.set_cell(atoms_slab.cell * lattice_const / a_init, scale_atoms=True)
-    atoms_slab.center(vacuum=vacuum / 2.0, axis=2)
-    atoms_slab.symbols = [element_bulk] * len(atoms_slab)
+    # Center and reorder surface structure.
+    atoms_slab.center(vacuum=vacuum/2.0, axis=2)
+    atoms_slab *= (repetitions[0], repetitions[1], 1)
+    atoms_slab = reorder_surface(atoms_slab)
 
-    n_atoms_1x1 = len(atoms_slab)
-    atoms_slab *= (repetitions[0], 1, 1)
-    atoms_slab *= (1, repetitions[1], 1)
-    sort_list = sorted([(a.index % n_atoms_1x1, a.index) for a in atoms_slab])
-    indices = [i[1] for i in sort_list]
-    atoms_slab = atoms_slab[indices]
-
-    if number_dopant == 0 or element_dopant == element_bulk:
-        element_dopant = element_bulk[:]
-        number_dopant = 0
-
+    # Get connectivity of strucrture.
     get_connectivity(
         atoms=atoms_slab,
         method="cutoff",
@@ -271,46 +240,39 @@ def get_atoms_slab(
         attach_graph=True,
     )
 
+    # Substitute atoms with dopants.
     surf_indices = [a.index for a in atoms_slab if a.tag == 1]
     surf_indices.reverse()
-
     for ii in range(number_dopant):
         jj = surf_indices[ii]
         atoms_slab[jj].symbol = element_dopant
 
-    magmoms = [1.0 if a.symbol in magnetic_elements else 0.0 for a in atoms_slab]
-    atoms_slab.set_initial_magnetic_moments(magmoms=magmoms)
-
-    # Get name and build atoms.info
-    surf_structure = atoms_bulk.info["name"][:]
+    # Get name and create info dictionary.
+    name = atoms_bulk.info["name"][:]
     if number_dopant > 0:
-        surf_structure += f"+{element_dopant}{number_dopant}"
-    surf_structure += f"-{miller_index}"
-
-    name = "_".join([surf_structure, "x".join([str(ii) for ii in repetitions])])
-
+        name += f"+{element_dopant}{number_dopant}"
+    name += f"-{miller_index}"
+    name += "_"+"x".join([str(ii) for ii in repetitions])
     atoms_slab.info = {
-        "name": name,
-        "name_clean": name,
-        "species": "clean",
-        "structure_type": "surface",
-        "surf_structure": surf_structure,
+        "name": name, # Mandatory.
+        "name_ref": name, # Mandatory.
+        "species": "clean", # Mandatory.
+        "structure_type": "surface", # Mandatory.
         "n_atoms_clean": len(atoms_slab),
+        "name_bulk": atoms_bulk.info["name"][:],
         "element_bulk": element_bulk,
         "miller_index": miller_index,
+        "repetitions": repetitions,
         "element_dopant": element_dopant,
         "number_dopant": number_dopant,
-        "repetitions": repetitions,
         "lattice_const": lattice_const,
     }
 
     return atoms_slab
 
-
 # -------------------------------------------------------------------------------------
 # GET ATOMS GAS
 # -------------------------------------------------------------------------------------
-
 
 def get_atoms_gas(species, vacuum=12.0):
 
@@ -617,10 +579,10 @@ def get_atoms_gas(species, vacuum=12.0):
     symbols_dict = formula.count()
 
     atoms_gas.info = {
-        "name": species,
-        "species": species,
-        "structure_type": "gas",
-        "surf_structure": "gas",
+        "name": species, # Mandatory.
+        "name_ref": "gas", # Mandatory.
+        "species": species, # Mandatory.
+        "structure_type": "gas", # Mandatory.
         "bonds_surf": bonds_surf,
         "sites_names": sites_names,
         "symmetric_ads": symmetric_ads,
@@ -629,7 +591,6 @@ def get_atoms_gas(species, vacuum=12.0):
     }
 
     return atoms_gas
-
 
 # -------------------------------------------------------------------------------------
 # MAIN

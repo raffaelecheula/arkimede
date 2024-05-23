@@ -12,11 +12,11 @@ from ase.optimize import BFGS
 from ase.calculators.singlepoint import SinglePointCalculator, all_properties
 
 # -------------------------------------------------------------------------------------
-# GET ATOMS FIXED
+# GET INDICES FIXED
 # -------------------------------------------------------------------------------------
 
-def get_atoms_fixed(atoms, return_mask=False):
-    """Get atoms with FixAtoms constraints."""
+def get_indices_fixed(atoms, return_mask=False):
+    """Get indices of atoms with FixAtoms constraints."""
     from ase.constraints import FixAtoms
     indices = []
     for constraint in atoms.constraints:
@@ -29,23 +29,23 @@ def get_atoms_fixed(atoms, return_mask=False):
         return indices
 
 # -------------------------------------------------------------------------------------
-# GET ATOMS NOT FIXED
+# GET INDICES NOT FIXED
 # -------------------------------------------------------------------------------------
 
-def get_atoms_not_fixed(atoms, return_mask=False):
-    """Get atoms without FixAtoms constraints."""
-    indices = [ii for ii in range(len(atoms)) if ii not in get_atoms_fixed(atoms)]
+def get_indices_not_fixed(atoms, return_mask=False):
+    """Get indices of atoms without FixAtoms constraints."""
+    indices = [ii for ii in range(len(atoms)) if ii not in get_indices_fixed(atoms)]
     if return_mask:
         return [True if ii in indices else False for ii in range(len(atoms))]
     else:
         return indices
 
 # -------------------------------------------------------------------------------------
-# GET ATOMS NOT SURFACE
+# GET INDICES ADSORBATE
 # -------------------------------------------------------------------------------------
 
-def get_atoms_not_surface(atoms, return_mask=False):
-    """Get atoms with index higher than n_atoms_clean."""
+def get_indices_adsorbate(atoms, return_mask=False):
+    """Get indices of atoms adsorbate."""
     if "indices_ads" in atoms.info:
         indices = atoms.info["indices_ads"]
     elif "n_atoms_clean" in atoms.info:
@@ -240,22 +240,23 @@ def get_new_IS_and_FS_from_atoms_TS(
 def write_atoms_to_db(
     atoms,
     db_ase,
+    get_status = True,
     keys_match=["name", "calculation"],
-    keys_store=["name", "calculation", "species", "surf_structure"],
+    keys_store=["name", "name_ref", "species", "calculation", "status"],
 ):
     """Write atoms to ase database."""
+    if get_status is True:
+        atoms.info["status"] = get_status_calculation(atoms)
     kwargs_match = {}
     for key in keys_match:
         kwargs_match[key] = atoms.info[key]
     kwargs_store = {}
     for key in keys_store:
         kwargs_store[key] = atoms.info[key]
-    status = get_status_calculation(atoms)
     if db_ase.count(**kwargs_match) == 0:
         db_ase.write(
             atoms=Atoms(atoms),
             data=atoms.info,
-            status=status,
             **kwargs_store,
         )
     elif db_ase.count(**kwargs_match) == 1:
@@ -264,7 +265,6 @@ def write_atoms_to_db(
             id=row_id,
             atoms=Atoms(atoms),
             data=atoms.info,
-            status=status,
             **kwargs_store,
         )
 
@@ -298,25 +298,25 @@ def read_atoms_from_db(atoms, db_ase, keys_match=["name", "calculation"]):
 
 def update_clean_slab_positions(atoms, db_ase):
     """Update positions of relaxed clean slab."""
-    if "atoms_clean" in atoms.info:
-        if db_ase.count(name = atoms.info["atoms_clean"]) == 1:
-            atoms_row = db_ase.get(name = atoms.info["atoms_clean"])
+    if "name_ref" in atoms.info and "n_atoms_clean" in atoms.info:
+        if db_ase.count(name = atoms.info["name_ref"]) == 1:
+            atoms_row = db_ase.get(name = atoms.info["name_ref"])
+            n_atoms_clean = atoms_row.data["n_atoms_clean"]
             atoms.set_positions(
-                np.vstack((atoms_row.positions, atoms[len(atoms_row):].positions))
+                np.vstack((atoms_row.positions, atoms[n_atoms_clean:].positions))
             )
     return atoms
 
 # -------------------------------------------------------------------------------------
-# PRINT RESULTS CALCULATION
+# GET STATUS CALCULATION
 # -------------------------------------------------------------------------------------
 
 def get_status_calculation(atoms):
     """Get the status of the calculation."""
-    if atoms.info["converged"] is True:
-        if atoms.info["modified"] is True:
-            status = "modified"
-        else:
-            status = "finished"
+    if atoms.info["converged"] is True and atoms.info["modified"] is False:
+        status = "finished"
+    elif atoms.info["converged"] is True and atoms.info["modified"] is True:
+        status = "modified"
     else:
         status = "unfinished"
     return status
@@ -325,9 +325,11 @@ def get_status_calculation(atoms):
 # PRINT RESULTS CALCULATION
 # -------------------------------------------------------------------------------------
 
-def print_results_calculation(atoms):
+def print_results_calculation(atoms, get_status=True):
     """Print results of the calculation to screen."""
-    status_str = f'{get_status_calculation(atoms):15s}'
+    if get_status is True:
+        atoms.info["status"] = get_status_calculation(atoms)
+    status_str = f'{atoms.info["status"]:15s}'
     if atoms.calc and "energy" in atoms.calc.results:
         energy_str = f'{atoms.calc.results["energy"]:15.3f}'
     else:
@@ -347,7 +349,7 @@ def update_info_TS(atoms_TS, atoms_IS, atoms_FS):
     """Update positions of relaxed clean slab."""
     species = "→".join([str(atoms_IS.info["species"]), str(atoms_FS.info["species"])])
     site_id = "→".join([str(atoms_IS.info["site_id"]), str(atoms_FS.info["site_id"])])
-    name_TS = "_".join([str(atoms_IS.info["surface_name"]), species, site_id])
+    name_TS = "_".join([str(atoms_IS.info["name_ref"]), species, site_id])
     atoms_TS.info["species"] = species
     atoms_TS.info["site_id"] = site_id
     atoms_TS.info["name"] = name_TS
@@ -364,10 +366,22 @@ def check_same_connectivity(atoms_1, atoms_2):
     return (connectivity_1 == connectivity_2).all()
 
 # -------------------------------------------------------------------------------------
-# GET NAMES METADATA
+# GET METADATA REACTIONS
 # -------------------------------------------------------------------------------------
 
-def get_names_metadata(
+def get_metadata_reaction(atoms_neb):
+    """Get list of metadata for a reaction."""
+    return [
+        atoms_neb[0].info["name"],
+        atoms_neb[1].info["name"],
+        atoms_neb[1].info["bonds_TS"],
+    ]
+
+# -------------------------------------------------------------------------------------
+# GET DB METADATA
+# -------------------------------------------------------------------------------------
+
+def get_db_metadata(
     atoms_gas_tot,
     atoms_clean_tot,
     atoms_ads_tot,
@@ -375,21 +389,41 @@ def get_names_metadata(
 ):
     """Get the structures names as dictionary."""
     metadata = {
-        "gas": [
-            atoms.info["name"] for atoms in atoms_gas_tot
-        ],
-        "clean": [
-            atoms.info["name"] for atoms in atoms_clean_tot
-        ],
-        "adsorbates": [
-            atoms.info["name"] for atoms in atoms_ads_tot
-        ],
-        "reactions": [
-            [atoms.info["name"] for atoms in atoms_neb] 
-            for atoms_neb in atoms_neb_tot
-        ],
+        "gas": [atoms.info["name"] for atoms in atoms_gas_tot],
+        "clean": [atoms.info["name"] for atoms in atoms_clean_tot],
+        "adsorbate": [atoms.info["name"] for atoms in atoms_ads_tot],
+        "reaction": [get_metadata_reaction(atoms_neb) for atoms_neb in atoms_neb_tot]
     }
     return metadata
+
+# -------------------------------------------------------------------------------------
+# GET ATOMS LIST FROM DB METADATA
+# -------------------------------------------------------------------------------------
+
+def get_atoms_list_from_db_metadata(db_ase, selection, metadata_key):
+    
+    atoms_list = []
+    if metadata_key == "reaction":
+        for obj in db_ase.metadata[metadata_key]:
+            atoms_neb = []
+            name_IS, name_FS, bonds_TS = obj
+            for name in [name_IS, name_FS]:
+                selection_new = ",".join([selection, f"name={name}"])
+                atoms_row = db_ase.get(selection=selection_new)
+                atoms = atoms_row.toatoms()
+                atoms.info = atoms_row.data
+                atoms.info["bonds_TS"] = bonds_TS
+                atoms_neb.append(atoms)
+            atoms_list.append(atoms_neb)
+    else:
+        for name in db_ase.metadata[metadata_key]:
+            selection_new = ",".join([selection, f"name={name}"])
+            atoms_row = db_ase.get(selection=selection_new)
+            atoms = atoms_row.toatoms()
+            atoms.info = atoms_row.data
+            atoms_list.append(atoms)
+    
+    return atoms_list
 
 # -------------------------------------------------------------------------------------
 # GET ATOMS LIST FROM DB
@@ -413,32 +447,6 @@ def get_atoms_list_from_db(db_ase, selection="", **kwargs):
 def get_atoms_min_energy(atoms_list):
     ii = np.argmin([atoms.get_potential_energy() for atoms in atoms_list])
     return atoms_list[ii]
-
-# -------------------------------------------------------------------------------------
-# GET ATOMS LIST FROM DB METADATA
-# -------------------------------------------------------------------------------------
-
-def get_atoms_list_from_db_metadata(db_ase, selection, metadata_key):
-    
-    atoms_list = []
-    for name in db_ase.metadata[metadata_key]:
-        if isinstance(name, str):
-            selection_new = ",".join([selection, f"name={name}"])
-            atoms_row = db_ase.get(selection=selection_new)
-            atoms = atoms_row.toatoms()
-            atoms.info = atoms_row.data
-            atoms_list.append(atoms)
-        else:
-            atoms_ii_list = []
-            for name_ii in name:
-                selection_new = ",".join([selection, f"name={name_ii}"])
-                atoms_row = db_ase.get(selection=selection_new)
-                atoms = atoms_row.toatoms()
-                atoms.info = atoms_row.data
-                atoms_ii_list.append(atoms)
-            atoms_list.append(atoms_ii_list)
-    
-    return atoms_list
 
 # -------------------------------------------------------------------------------------
 # FILTER RESULTS

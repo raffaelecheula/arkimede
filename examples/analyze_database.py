@@ -14,7 +14,7 @@ from arkimede.workflow.utilities import get_atoms_list_from_db
 def main():
     
     # Control parameters.
-    delete_selection = False
+    delete_selection = True
     show_selection = False
     
     # Active learning step.
@@ -27,8 +27,8 @@ def main():
     calculation = "climbbonds"
     selection = ""
     selection += f"calculation={calculation},"
-    #selection += f"status=unfinished,"
-    #selection += "surf_structure=fcc-Rh-111,"
+    selection += f"status=unfinished,"
+    #selection += "name_ref=fcc-Rh-111,"
     
     # Initialize ase database.
     db_ase = connect(name=db_name)

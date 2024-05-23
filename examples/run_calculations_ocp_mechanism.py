@@ -32,7 +32,7 @@ def main():
     db_ase_append = True
 
     # Calculations parameters.
-    fmax = 0.05
+    fmax = 0.01 # 0.05
     steps_max_relax = 1000
     steps_max_neb = 10
     steps_max_ts_search = 1000
@@ -68,12 +68,12 @@ def main():
     atoms_ads_tot = get_atoms_list_from_db_metadata(
         db_ase=db_init,
         selection=selection,
-        metadata_key="adsorbates",
+        metadata_key="adsorbate",
     )
     atoms_neb_tot = get_atoms_list_from_db_metadata(
         db_ase=db_init,
         selection=selection,
-        metadata_key="reactions",
+        metadata_key="reaction",
     )
     
     # Initialize ase dft database.
