@@ -84,7 +84,7 @@ def main():
         'dataset.val.a2g_args.r_forces': True,
         'task.primary_metric': "forces_mae",
         'logger': 'wandb',
-        'optim.early_stopping_lr': 1e-9,
+        #'optim.early_stopping_lr': 1e-9,
     }
     update_config_yaml(
         checkpoint_path=checkpoint_path,

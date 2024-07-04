@@ -20,12 +20,14 @@ class ClimbBonds(FixConstraint):
         rtol=1e-5,
         atol=1e-8,
         t_bound=1e+9,
+        scale_forces=1.,
     ):
         self.bonds = np.asarray([bond[:2] for bond in bonds])
         self.ftol = ftol
         self.rtol = rtol
         self.atol = atol
         self.t_bound = t_bound
+        self.scale_forces = scale_forces
         self.bondlengths = np.zeros(self.bonds.shape[0])
         
     def adjust_momenta(self, atoms, forces):
@@ -36,14 +38,14 @@ class ClimbBonds(FixConstraint):
 
         def get_dforces(time, forces):
             x_dot_tot = 0.
-            forces = forces.reshape(len(atoms), 3)
+            forces = forces.reshape(-1, 3)
             dforces = np.zeros(forces.shape)
             for ii, bond in enumerate(self.bonds):
                 index_a, index_b = bond
                 dir_bond = atoms.positions[index_a] - atoms.positions[index_b]
                 dir_bond, _ = find_mic(dir_bond, atoms.cell, atoms.pbc)
                 dir_forces = (
-                    +forces[index_a]/masses[index_a] 
+                    +forces[index_a]/masses[index_a]
                     -forces[index_b]/masses[index_b]
                 )
                 mass_red = 1 / (1/masses[index_a] + 1/masses[index_b])
@@ -66,13 +68,13 @@ class ClimbBonds(FixConstraint):
         while solver.status != 'finished':
             solver.step()
 
-        forces[:] = solver.y.reshape(len(atoms), 3)
+        forces[:] = solver.y.reshape(-1, 3)
 
     def adjust_forces(self, atoms, forces):
         forces0 = forces.copy()
         self.adjust_momenta(atoms, forces)
         self.projected_forces = forces-forces0
-        forces += self.projected_forces
+        forces += self.scale_forces * self.projected_forces
 
     def adjust_positions(self, atoms, forces):
         pass

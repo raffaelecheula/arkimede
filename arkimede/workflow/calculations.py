@@ -22,7 +22,7 @@ from arkimede.workflow.utilities import (
 def run_relax_calculation(
     atoms,
     calc,
-    fmax=0.01,
+    fmax=0.05,
     steps_max=300,
     logfile='-',
     label='relax',
@@ -91,7 +91,7 @@ def run_relax_calculation(
 def run_neb_calculation(
     images,
     calc,
-    fmax=0.01,
+    fmax=0.05,
     steps_max=300,
     k_neb=0.10,
     label='neb',
@@ -222,7 +222,7 @@ def run_dimer_calculation(
     write_images=False,
     update_cell=False,
     logfile='-',
-    fmax=0.01,
+    fmax=0.05,
     steps_max=500,
     max_displacement=False,
     max_forces=20.,
@@ -349,7 +349,7 @@ def run_climbbonds_calculation(
     write_images=False,
     update_cell=False,
     logfile='-',
-    fmax=0.01,
+    fmax=0.05,
     steps_max=500,
     max_displacement=None,
     max_forces=20.,
@@ -375,14 +375,6 @@ def run_climbbonds_calculation(
     atoms_copy = atoms.copy()
     atoms_copy.calc = calc
     atoms_copy.set_constraint(atoms_copy.constraints+[ClimbBonds(bonds=bonds_TS)])
-
-    # TODO:
-    #from arkimede.optimize.climbbonds import AdaptiveBFGS
-    #optimizer = AdaptiveBFGS
-    #kwargs_opt = {}
-    #from ase.optimize.sciopt import SciPyFminCG
-    #optimizer = SciPyFminCG
-    #kwargs_opt = {}
 
     # Setup the optimizer.
     opt = optimizer(
@@ -424,10 +416,6 @@ def run_climbbonds_calculation(
         print(error)
         converged = False
     
-    # TODO:
-    #print(calc.counter)
-    #exit()
-    
     # Update the input atoms with the results.
     atoms.set_positions(atoms_copy.positions)
     if update_cell is True:
@@ -459,7 +447,7 @@ def run_climbfixint_calculation(
     write_images=False,
     update_cell=False,
     logfile='-',
-    fmax=0.01,
+    fmax=0.05,
     steps_max=500,
     optB_kwargs={'logfile': '-', 'trajectory': None},
     max_displacement=None,
@@ -554,7 +542,7 @@ def run_sella_calculation(
     write_images=False,
     update_cell=False,
     logfile='-',
-    fmax=0.01,
+    fmax=0.05,
     steps_max=500,
     properties=["energy", "forces"],
     **kwargs,

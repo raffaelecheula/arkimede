@@ -27,7 +27,7 @@ def main():
     calculation = "climbbonds"
     selection = ""
     selection += f"calculation={calculation},"
-    selection += f"status=unfinished,"
+    #selection += f"status=unfinished,"
     #selection += "name_ref=fcc-Rh-111,"
     
     # Initialize ase database.
