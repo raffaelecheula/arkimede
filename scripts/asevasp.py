@@ -1,6 +1,6 @@
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # IMPORTS
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 import os
 from ase.io import read
@@ -8,9 +8,9 @@ from vasp_interactive import VaspInteractive
 from arkimede.workflow.dft_calculations import check_file_contains
 from arkimede.workflow.calculations import run_calculation
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # ASEVASP CALCULATION
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 # Read atoms object.
 atoms = read("asevasp.traj")
@@ -19,7 +19,7 @@ kpts = atoms.info["kpts"]
 filename_out = atoms.info["filename_out"]
 
 # Setup vasp calculator and run the calculations.
-with VaspInteractive(**vasp_flags, kpts=kpts) as calc:
+with VaspInteractive(**vasp_flags, directory="vasp", kpts=kpts) as calc:
     for calculation in atoms.info["calculation"].split("+"):
         key_string = calculation+" calculation finished"
         trajname = calculation+".traj"
@@ -35,6 +35,6 @@ with VaspInteractive(**vasp_flags, kpts=kpts) as calc:
             print(key_string)
     print("all calculations finished")
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 # END
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------

@@ -1,15 +1,13 @@
-#######################################################################################
-# This is adapted from ocp/tutorial.
-#######################################################################################
-
 # -------------------------------------------------------------------------------------
 # IMPORTS
 # -------------------------------------------------------------------------------------
 
+# This is adapted from ocp/tutorial.
+
 import os
 import numpy as np
 from pathlib import Path
-from arkimede.utils import checkpoints_basedir
+from arkimede.utilities.paths import checkpoints_basedir
 
 # -------------------------------------------------------------------------------------
 # OCP ROOT
@@ -280,23 +278,26 @@ def merge_databases(db_name_list, db_new_name):
 # -------------------------------------------------------------------------------------
 
 def update_config_yaml(
-    checkpoint_path,
+    checkpoint_path=None,
+    config_dict=None,
     config_yaml='config.yml',
     delete_keys=(),
     update_keys={},
 ):
     """Generate a yml config file from an existing checkpoint file.
     
-    checkpoint_path: string to path of an existing checkpoint
+    checkpoint_path: string to path of an existing checkpoint.
+    config_dict: dictionary of configurations.
     yml: name of file to write to.
-    delete_keys: list of keys to remove from the config
-    update: dictionary of key:values to update
+    delete_keys: list of keys to remove from the config.
+    update: dictionary of key:values to update.
     """
     
     import yaml
-    from ocpmodels.common.relaxation.ase_utils import OCPCalculator
-
-    config_dict = OCPCalculator(checkpoint_path=checkpoint_path).config
+    
+    if config_dict is None:
+        from ocpmodels.common.relaxation.ase_utils import OCPCalculator
+        config_dict = OCPCalculator(checkpoint_path=checkpoint_path).config
     
     for key in delete_keys:
         if key in config_dict:
@@ -326,6 +327,35 @@ def update_config_yaml(
     
     with open(config_yaml, 'w') as fileobj:
         yaml.dump(config_dict, fileobj)
+
+# -------------------------------------------------------------------------------------
+# FINE TUNE OCP MODEL
+# -------------------------------------------------------------------------------------
+
+def fine_tune_ocp_model(
+    checkpoint_path,
+    config_yaml="config.yml",
+    directory="finetuning",
+    step_actlearn=0,
+    identifier="step",
+):
+
+    # Fine-tuning settings.
+    args_dict = {
+        "mode": "train",
+        "config-yml": config_yaml,
+        "checkpoint": checkpoint_path,
+        "run-dir": directory,
+        "identifier": f"{identifier}-{step_actlearn:04d}",
+        "amp": "",
+    }
+    
+    # Run the fine-tuning.
+    command = f"python {ocp_main()}"
+    for arg in args_dict:
+        command += f" --{arg} {args_dict[arg]}"
+    command += f" > {directory}/{identifier}-{step_actlearn:04d}.out 2>&1"
+    os.system(command)
 
 # -------------------------------------------------------------------------------------
 # REF ENERGY ADS DICT

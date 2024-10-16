@@ -7,9 +7,9 @@ import numpy as np
 from ase.io import read
 from ase.db import connect
 from ase.calculators.vasp.vasp import Vasp
-from arkimede.utils import templates_basedir, scripts_basedir
+from arkimede.utilities import read_step_actlearn, get_atoms_list_from_db
+from arkimede.utilities.paths import templates_basedir, scripts_basedir
 from arkimede.workflow.reaction_workflow import run_dft_calculations_k8s
-from arkimede.workflow.utilities import read_step_actlearn, get_atoms_list_from_db
 from arkimede.workflow.dft_calculations import (
     write_input_asevasp,
     read_output_asevasp,

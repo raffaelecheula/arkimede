@@ -12,7 +12,7 @@ from ase.db import connect
 def main():
     
     # Active learning step.
-    step_actlearn = 1
+    step_actlearn = 0
     
     # Name of ase database.
     db_name = f"databases/vasp_{step_actlearn:02d}.db"

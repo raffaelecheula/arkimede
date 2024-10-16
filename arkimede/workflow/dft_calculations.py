@@ -10,7 +10,7 @@ import numpy as np
 from ase.io import read
 from ase.io import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
-from arkimede.workflow.utilities import filter_results
+from arkimede.utilities import update_atoms_from_atoms_opt
 
 # -------------------------------------------------------------------------------------
 # GET NAME K8S
@@ -141,38 +141,47 @@ def read_output_vasp(
     """Read output of a vasp calculation."""
 
     # Read all atoms from output.
-    atoms_list = read(os.path.join(directory, filename), ':')
-    atoms_opt = atoms_list[-1]
+    atoms_opt_all = read(os.path.join(directory, filename), ":")
+    atoms_opt = atoms_opt_all[-1]
+
+    # Update the input atoms with the results of the calculation.
+    atoms = update_atoms_from_atoms_opt(
+        atoms=atoms,
+        atoms_opt=atoms_opt,
+        converged=True, # TODO:
+        modified=False,
+        properties=properties,
+        update_cell=update_cell,
+    )
+    
+    # Get list of all atoms in the calculation output.
+    atoms_all = []
+    for ii, atoms_opt_ii in enumerate(atoms_opt_all):
+        atoms_ii = update_atoms_from_atoms_opt(
+            atoms=atoms.copy(),
+            atoms_opt=atoms_opt_ii,
+            converged=True, # TODO:
+            modified=False,
+            properties=properties,
+            update_cell=update_cell,
+        )
+        # Update name of atoms.
+        atoms_ii.info["name"] += f"-{ii:05d}"
+        atoms_all.append(atoms_ii)
     
     # Save trajectory.
     if save_trajs is True:
         trajname = os.path.join(directory, f'{label}.traj')
         traj = Trajectory(filename=trajname, mode='w')
-        for atoms in read(os.path.join(directory, filename), ':'):
+        for atoms_ii in atoms_all:
             traj.write(atoms, **atoms.calc.results)
     
-    # Update the input atoms with the results.
-    atoms.set_positions(atoms_opt.positions)
-    if update_cell is True:
-        atoms.set_cell(atoms_opt.cell)
-    results = filter_results(results=atoms_opt.calc.results, properties=properties)
-    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
-
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
         atoms.write(filename, radii=0.9, scale=200)
 
-    # Update info of atoms.
-    for ii, atoms_ii in enumerate(atoms_list):
-        atoms_ii.info = atoms.info.copy()
-        atoms_ii.info["name"] += f"-{ii}"
-
-    # Mark final atoms.
-    atoms.info["modified"] = False
-    atoms.info["converged"] = True
-
-    return atoms_list
+    return atoms_all
 
 # -------------------------------------------------------------------------------------
 # CHECK FINISHED VASP
@@ -206,30 +215,40 @@ def read_output_asevasp(
     """Read output of an asevasp calculation."""
     
     # Read all atoms from output.
-    atoms_list = []
+    atoms_opt_all = []
     for calculation in atoms.info["calculation"].split("+"):
-        atoms_list += read(os.path.join(directory, calculation+".traj"), ":")
-    atoms_opt = atoms_list[-1]
+        atoms_opt_all += read(os.path.join(directory, calculation+".traj"), ":")
+    atoms_opt = atoms_opt_all[-1]
     
-    # Update the input atoms with the results.
-    atoms.set_positions(atoms_opt.positions)
-    if update_cell is True:
-        atoms.set_cell(atoms_opt.cell)
-    results = filter_results(results=atoms_opt.calc.results, properties=properties)
-    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
+    # Update the input atoms with the results of the calculation.
+    atoms = update_atoms_from_atoms_opt(
+        atoms=atoms,
+        atoms_opt=atoms_opt,
+        converged=atoms_opt.info["converged"],
+        modified=atoms_opt.info["modified"],
+        properties=properties,
+        update_cell=update_cell,
+    )
     
-    # Update name of atoms.
-    for ii, atoms_ii in enumerate(atoms_list):
+    # Get list of all atoms in the calculation output.
+    atoms_all = []
+    for ii, atoms_opt_ii in enumerate(atoms_opt_all):
+        atoms_ii = update_atoms_from_atoms_opt(
+            atoms=atoms.copy(),
+            atoms_opt=atoms_opt_ii,
+            converged=atoms_ii.info["converged"],
+            modified=atoms_ii.info["modified"],
+            properties=properties,
+            update_cell=update_cell,
+        )
+        # Update name of atoms.
         if "displacement" in atoms_ii.info:
             atoms_ii.info["name"] += "-"+atoms_ii.info["displacement"]
         else:
             atoms_ii.info["name"] += f"-{ii:05d}"
+        atoms_all.append(atoms_ii)
     
-    # Mark final atoms.
-    atoms.info["modified"] = False
-    atoms.info["converged"] = True
-    
-    return atoms_list
+    return atoms_all
 
 # -------------------------------------------------------------------------------------
 # CHECK FINISHED ASEVASP

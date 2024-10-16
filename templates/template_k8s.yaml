@@ -47,3 +47,12 @@ spec:
           medium: Memory
         name: dshm
       priorityClassName: default-priority
+      affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                  - key: "kubernetes.io/hostname"
+                    operator: "NotIn"
+                    values:
+                      - major-gator

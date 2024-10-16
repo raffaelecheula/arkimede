@@ -5,7 +5,7 @@
 import numpy as np
 from ase.db import connect
 from ase.gui.gui import GUI
-from arkimede.workflow.utilities import get_atoms_list_from_db
+from arkimede.utilities import get_atoms_list_from_db, success_curve
 
 # -------------------------------------------------------------------------------------
 # MAIN
@@ -14,7 +14,7 @@ from arkimede.workflow.utilities import get_atoms_list_from_db
 def main():
     
     # Control parameters.
-    delete_selection = True
+    delete_selection = False
     show_selection = False
     
     # Active learning step.
@@ -27,8 +27,6 @@ def main():
     calculation = "climbbonds"
     selection = ""
     selection += f"calculation={calculation},"
-    #selection += f"status=unfinished,"
-    #selection += "name_ref=fcc-Rh-111,"
     
     # Initialize ase database.
     db_ase = connect(name=db_name)
@@ -36,14 +34,25 @@ def main():
     # Print number of selected atoms.
     selected = list(db_ase.select(selection=selection))
     print(f"number of calculations:", len(selected))
-    selected = list(db_ase.select(selection=f"{selection},status=finished"))
+    selected = list(db_ase.select(selection=selection, status="finished"))
     print(f"number of converged:", len(selected))
     
-    atoms_list = get_atoms_list_from_db(db_ase=db_ase, selection=selection)
-    
+    # Delete atoms from database.
     if delete_selection is True:
+        selection += "status=unfinished,"
         db_ase.delete([aa.id for aa in db_ase.select(selection=selection)])
     
+    # Read atoms from database.
+    atoms_list = get_atoms_list_from_db(db_ase=db_ase, selection=selection)
+    
+    # Plot success curve.
+    success_curve(
+        atoms_list=atoms_list,
+        max_steps=1000,
+        filename="success_curve.png",
+    )
+    
+    # Show atoms.
     if show_selection is True and len(atoms_list) > 0:
         gui = GUI(atoms_list)
         gui.run()

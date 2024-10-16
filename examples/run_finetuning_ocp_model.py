@@ -3,7 +3,7 @@
 # -------------------------------------------------------------------------------------
 
 import os
-from arkimede.workflow.utilities import read_step_actlearn, write_step_actlearn
+from arkimede.utilities import read_step_actlearn, write_step_actlearn
 from arkimede.ocp.ocp_utils import (
     ocp_main,
     get_checkpoint_path,
@@ -11,6 +11,7 @@ from arkimede.ocp.ocp_utils import (
     split_database,
     merge_databases,
     update_config_yaml,
+    fine_tune_ocp_model,
 )
 
 # -------------------------------------------------------------------------------------
@@ -25,15 +26,15 @@ def main():
     
     # Name of dft databases.
     db_name_list = [f"databases/vasp_{ii:02d}.db" for ii in range(step_actlearn+1)]
-    #db_name_list.append("databases/vasp_gas.db")
     
     # Merge databases into one total database.
     db_tot_name = "databases/vasp_tot.db"
     merge_databases(db_name_list=db_name_list, db_new_name=db_tot_name)
     
-    # Directory and identifier for fine-tuning.
+    # Directory, identifier, and new yaml config file for fine-tuning.
     directory = "finetuning"
     identifier = f"step-{step_actlearn+1:02d}"
+    config_yaml = f"{directory}/config.yml"
     
     # OCPmodels checkpoint path.
     checkpoint_key = 'GemNet-OC OC20+OC22 v2'
@@ -41,10 +42,6 @@ def main():
         checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
     else:
         checkpoint_path = get_checkpoint_path_actlearn(step_actlearn=step_actlearn)
-    
-    # New yaml config and output files.
-    config_yaml = f"{directory}/config.yml"
-    output = f"{directory}/{identifier}.txt"
     
     # Split the database into train, test (optional), and val databases.
     split_database(
@@ -93,23 +90,13 @@ def main():
         update_keys=update_keys,
     )
     
-    # Fine-tuning settings.
-    args_dict = {
-        "mode": "train",
-        "config-yml": config_yaml,
-        "checkpoint": checkpoint_path,
-        "run-dir": directory,
-        "identifier": identifier,
-        "amp": "",
-    }
-    
     # Run the fine-tuning.
-    command = f"python {ocp_main()}"
-    for arg in args_dict:
-        command += f" --{arg} {args_dict[arg]}"
-    if output is not None:
-        command += f" > {output} 2>&1"
-    os.system(command)
+    fine_tune_ocp_model(
+        checkpoint_path=checkpoint_path,
+        config_yaml=config_yaml,
+        directory=directory,
+        identifier=identifier,
+    )
 
     # Update active learning step.
     step_actlearn += 1

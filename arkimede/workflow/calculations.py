@@ -8,11 +8,12 @@ from ase.io import Trajectory
 from ase.optimize import BFGS, LBFGS, ODE12r
 from ase.neb import NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
-from arkimede.workflow.utilities import (
+from arkimede.utilities import (
     get_indices_not_fixed,
     get_indices_adsorbate,
     filter_results,
     get_atoms_too_close,
+    update_atoms_from_atoms_opt,
 )
 
 # -------------------------------------------------------------------------------------
@@ -23,7 +24,8 @@ def run_relax_calculation(
     atoms,
     calc,
     fmax=0.05,
-    steps_max=300,
+    max_steps=300,
+    min_steps=None,
     logfile='-',
     label='relax',
     directory='.',
@@ -47,14 +49,23 @@ def run_relax_calculation(
         trajname = os.path.join(directory, f'{label}.traj')
 
     # Setup the optimizer.
-    atoms_copy = atoms.copy()
-    atoms_copy.calc = calc
+    atoms_opt = atoms.copy()
+    atoms_opt.calc = calc
     opt = optimizer(
-        atoms=atoms_copy,
+        atoms=atoms_opt,
         logfile=logfile,
         trajectory=trajname,
         **kwargs_opt,
     )
+    
+    # Observer to set a minimum number of steps.
+    if min_steps:
+        def set_min_steps(opt=opt):
+            if opt.nsteps >= min_steps:
+                opt.fmax = fmax
+            else:
+                opt.fmax = 0.
+        opt.attach(set_min_steps, interval=1)
     
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
@@ -62,22 +73,21 @@ def run_relax_calculation(
     
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=steps_max)
+        opt.run(fmax=fmax, steps=max_steps)
         converged = opt.converged()
     except Exception as error:
         print(error)
         converged = False
     
-    # Update the input atoms with the results.
-    atoms.set_positions(atoms_copy.positions)
-    if update_cell is True:
-        atoms.set_cell(atoms_copy.cell)
-    results = filter_results(results=atoms_copy.calc.results, properties=properties)
-    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
-    atoms.info["modified"] = False
-    atoms.info["converged"] = bool(converged)
-    if "counter" in dir(calc):
-        atoms.info["counter"] = calc.counter
+    # Update the input atoms with the results of the calculation.
+    atoms = update_atoms_from_atoms_opt(
+        atoms=atoms,
+        atoms_opt=atoms_opt,
+        converged=converged,
+        modified=False,
+        properties=properties,
+        update_cell=update_cell,
+    )
 
     # Write image.
     if write_images is True:
@@ -92,7 +102,8 @@ def run_neb_calculation(
     images,
     calc,
     fmax=0.05,
-    steps_max=300,
+    max_steps=300,
+    min_steps=None,
     k_neb=0.10,
     label='neb',
     directory='.',
@@ -154,28 +165,37 @@ def run_neb_calculation(
     # Setup optimizer.
     opt = optimizer(neb, logfile=logfile, **kwargs_opt)
     
-    def activate_climb_obs(neb=neb, ftres=ftres_climb):
-        if neb.get_residual() < ftres:
-            neb.climb = True
-    
-    def print_energies_obs(neb=neb, opt=opt, print_path_energies=True):
-        fres = neb.get_residual()
-        print(f'Step: {opt.nsteps:4d} Fmax: {fres:9.4f}', end='  ')
-        for ii in (0, -1):
-            neb.energies[ii] = images[ii].calc.results['energy']
-        act_energy = max(neb.energies)-neb.energies[0]
-        print(f'Eact: {act_energy:+9.4f} eV', end='  ')
-        if print_path_energies is True:
-            print(f'Epath:', end='  ')
-            for energy in neb.energies:
-                print(f'{energy-neb.energies[0]:+9.4f}', end=' ')
-            print('eV')
-
-    # Attach observers.
+    # Observer for activating the climbing image.
     if activate_climb:
+        def activate_climb_obs(neb=neb, ftres=ftres_climb):
+            if neb.get_residual() < ftres:
+                neb.climb = True
         opt.attach(activate_climb_obs, interval=1)
+    
+    # Observer to print the energies of the path images.
     if print_energies:
+        def print_energies_obs(neb=neb, opt=opt, print_path_energies=True):
+            fres = neb.get_residual()
+            print(f'Step: {opt.nsteps:4d} Fmax: {fres:9.4f}', end='  ')
+            for ii in (0, -1):
+                neb.energies[ii] = images[ii].calc.results['energy']
+            act_energy = max(neb.energies)-neb.energies[0]
+            print(f'Eact: {act_energy:+9.4f} eV', end='  ')
+            if print_path_energies is True:
+                print(f'Epath:', end='  ')
+                for energy in neb.energies:
+                    print(f'{energy-neb.energies[0]:+9.4f}', end=' ')
+                print('eV')
         opt.attach(print_energies_obs, interval=1)
+    
+    # Observer to set a minimum number of steps.
+    if min_steps:
+        def set_min_steps(opt=opt):
+            if opt.nsteps >= min_steps:
+                opt.fmax = fmax
+            else:
+                opt.fmax = 0.
+        opt.attach(set_min_steps, interval=1)
 
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
@@ -184,8 +204,8 @@ def run_neb_calculation(
     # Run the calculation. The while is to keep NEBOptimizer going when 
     # it fails randomly.
     converged = False
-    while opt.nsteps < steps_max and not converged:
-        converged = opt.run(fmax=fmax, steps=steps_max-opt.nsteps)
+    while opt.nsteps < max_steps and not converged:
+        converged = opt.run(fmax=fmax, steps=max_steps-opt.nsteps)
     
     # Write trajectory.
     if save_trajs is True:
@@ -223,17 +243,19 @@ def run_dimer_calculation(
     update_cell=False,
     logfile='-',
     fmax=0.05,
-    steps_max=500,
+    max_steps=500,
+    min_steps=None,
     max_displacement=False,
     max_forces=20.,
     reset_eigenmode=True,
     sign_bond_dict={'break': +1, 'form': -1},
     properties=["energy", "forces"],
+    kwargs_dimer={},
     **kwargs,
 ):
     """Run a dimer calculation."""
     from ase.dimer import DimerControl, MinModeAtoms, MinModeTranslate
-    from arkimede.workflow.utilities import get_vector_from_bonds_TS
+    from arkimede.utilities import get_vector_from_bonds_TS
 
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
@@ -250,31 +272,34 @@ def run_dimer_calculation(
     atoms.calc = calc
     mask = get_indices_not_fixed(atoms, return_mask=True)
     
-    dimer_control = DimerControl(
-        initial_eigenmode_method='displacement',
-        displacement_method='vector',
-        logfile=None,
-        cg_translation=True,
-        use_central_forces=True,
-        extrapolate_forces=False,
-        order=1,
-        f_rot_min=0.10,
-        f_rot_max=1.00,
-        max_num_rot=6,
-        trial_angle=np.pi/6,
-        trial_trans_step=0.005,
-        maximum_translation=0.100,
-        dimer_separation=0.005,
-    )
-    atoms_dimer = MinModeAtoms(
+    kwargs_dimer_opt = {
+        "initial_eigenmode_method": 'displacement',
+        "displacement_method": 'vector',
+        "logfile": None,
+        "cg_translation": True,
+        "use_central_forces": True,
+        "extrapolate_forces": False,
+        "order": 1,
+        "f_rot_min": 0.10,
+        "f_rot_max": 1.00,
+        "max_num_rot": 6,
+        "trial_angle": np.pi/6,
+        "trial_trans_step": 0.005,
+        "maximum_translation": 0.100,
+        "dimer_separation": 0.005,
+    }
+    kwargs_dimer_opt.update(kwargs_dimer)
+    
+    dimer_control = DimerControl(**kwargs_dimer_opt)
+    atoms_opt = MinModeAtoms(
         atoms=atoms,
         control=dimer_control,
         mask=mask,
     )
-    atoms_dimer.displace(displacement_vector=vector, mask=mask)
+    atoms_opt.displace(displacement_vector=vector, mask=mask)
 
     opt = MinModeTranslate(
-        atoms=atoms_dimer,
+        atoms=atoms_opt,
         trajectory=trajname,
         logfile=logfile,
     )
@@ -283,28 +308,38 @@ def run_dimer_calculation(
     # Maybe there is a better way of doing this (e.g., selecting the 
     # eigenmode most similar to the directions of the ts bonds).
     if bonds_TS and reset_eigenmode:
-        def reset_eigenmode_obs(atoms_dimer=atoms_dimer):
+        def reset_eigenmode_obs(atoms_opt=atoms_opt):
             vector = get_vector_from_bonds_TS(
-                atoms=atoms_dimer,
+                atoms=atoms_opt,
                 bonds_TS=bonds_TS,
                 sign_bond_dict=sign_bond_dict,
             )
-            atoms_dimer.eigenmodes = [vector]
+            atoms_opt.eigenmodes = [vector]
         opt.attach(reset_eigenmode_obs, interval=1)
     
     # Observer that checks the displacement of the ts from the starting position.
     if max_displacement:
         def check_displacement():
-            displ = np.linalg.norm(atoms_dimer.positions-atoms.positions)
+            displ = np.linalg.norm(atoms_opt.positions-atoms.positions)
             if displ > max_displacement:
                 raise RuntimeError("atoms displaced too much")
-        opt.insert_observer(function=check_displacement, interval=10)
+        opt.attach(function=check_displacement, interval=10)
     
+    # Observer to stop the calculation if the maximum force is too high.
     if max_forces:
         def check_max_forces():
-            if (atoms_dimer.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
+            if (atoms_opt.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
                 raise RuntimeError("max force too high")
-        opt.insert_observer(function=check_max_forces, interval=5)
+        opt.attach(function=check_max_forces, interval=5)
+    
+    # Observer to set a minimum number of steps.
+    if min_steps:
+        def set_min_steps(opt=opt):
+            if opt.nsteps >= min_steps:
+                opt.fmax = fmax
+            else:
+                opt.fmax = 0.
+        opt.attach(set_min_steps, interval=1)
     
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
@@ -312,24 +347,23 @@ def run_dimer_calculation(
     
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=steps_max)
+        opt.run(fmax=fmax, steps=max_steps)
         converged = opt.converged()
     except Exception as error:
         print(error)
         converged = False
     
-    # Update the input atoms with the results.
-    atoms.set_positions(atoms_dimer.positions)
-    if update_cell is True:
-        atoms.set_cell(atoms_dimer.cell)
-    results = filter_results(results=atoms_dimer.calc.results, properties=properties)
-    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
-    atoms.info["vector"] = atoms_dimer.eigenmodes[0]
-    atoms.info["modified"] = False
-    atoms.info["converged"] = bool(converged)
-    if "counter" in dir(calc):
-        atoms.info["counter"] = calc.counter
-
+    # Update the input atoms with the results of the calculation.
+    atoms = update_atoms_from_atoms_opt(
+        atoms=atoms,
+        atoms_opt=atoms_opt,
+        converged=converged,
+        modified=False,
+        properties=properties,
+        update_cell=update_cell,
+    )
+    atoms.info["vector"] = atoms_opt.eigenmodes[0]
+    
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
@@ -350,13 +384,15 @@ def run_climbbonds_calculation(
     update_cell=False,
     logfile='-',
     fmax=0.05,
-    steps_max=500,
+    max_steps=500,
+    min_steps=None,
     max_displacement=None,
     max_forces=20.,
     atoms_too_close=True,
     optimizer=ODE12r,
     kwargs_opt={},
     properties=["energy", "forces"],
+    propagate_forces=True,
     **kwargs,
 ):
     """Run a climbbonds calculation."""
@@ -372,13 +408,16 @@ def run_climbbonds_calculation(
         trajname = os.path.join(directory, f'{label}.traj')
     
     # Create a copy of the atoms object to not mess with constraints.
-    atoms_copy = atoms.copy()
-    atoms_copy.calc = calc
-    atoms_copy.set_constraint(atoms_copy.constraints+[ClimbBonds(bonds=bonds_TS)])
+    atoms_opt = atoms.copy()
+    atoms_opt.calc = calc
+    atoms_opt.set_constraint(atoms_opt.constraints+[ClimbBonds(bonds=bonds_TS)])
+    if propagate_forces is True:
+        from arkimede.optimize.constraints import PropagateForces
+        atoms.set_constraint(atoms.constraints+[PropagateForces()])
 
     # Setup the optimizer.
     opt = optimizer(
-        atoms=atoms_copy,
+        atoms=atoms_opt,
         logfile=logfile,
         trajectory=trajname,
         **kwargs_opt,
@@ -387,22 +426,33 @@ def run_climbbonds_calculation(
     # Observer that checks the displacement of the ts from the starting position.
     if max_displacement:
         def check_displacement():
-            displ = np.linalg.norm(atoms_copy.positions-atoms.positions)
+            displ = np.linalg.norm(atoms_opt.positions-atoms.positions)
             if displ > max_displacement:
                 raise RuntimeError("atoms displaced too much")
-        opt.insert_observer(function=check_displacement, interval=10)
+        opt.attach(function=check_displacement, interval=10)
     
+    # Observer to stop the calculation if the maximum force is too high.
     if max_forces:
         def check_max_forces():
-            if (atoms_copy.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
+            if (atoms_opt.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
                 raise RuntimeError("max force too high")
-        opt.insert_observer(function=check_max_forces, interval=10)
+        opt.attach(function=check_max_forces, interval=10)
     
+    # Observer to stop the calculation if two atoms are too close to each other.
     if atoms_too_close:
         def check_atoms_too_close():
-            if get_atoms_too_close(atoms_copy, return_anomaly=True) is True:
+            if get_atoms_too_close(atoms_opt, return_anomaly=True) is True:
                 raise RuntimeError("atoms too close")
-        opt.insert_observer(function=check_atoms_too_close, interval=10)
+        opt.attach(function=check_atoms_too_close, interval=10)
+    
+    # Observer to set a minimum number of steps.
+    if min_steps:
+        def set_min_steps(opt=opt):
+            if opt.nsteps >= min_steps:
+                opt.fmax = fmax
+            else:
+                opt.fmax = 0.
+        opt.attach(set_min_steps, interval=1)
     
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
@@ -410,22 +460,21 @@ def run_climbbonds_calculation(
     
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=steps_max)
+        opt.run(fmax=fmax, steps=max_steps)
         converged = opt.converged()
     except Exception as error:
         print(error)
         converged = False
     
-    # Update the input atoms with the results.
-    atoms.set_positions(atoms_copy.positions)
-    if update_cell is True:
-        atoms.set_cell(atoms_copy.cell)
-    results = filter_results(results=atoms_copy.calc.results, properties=properties)
-    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
-    atoms.info["modified"] = False
-    atoms.info["converged"] = bool(converged)
-    if "counter" in dir(calc):
-        atoms.info["counter"] = calc.counter
+    # Update the input atoms with the results of the calculation.
+    atoms = update_atoms_from_atoms_opt(
+        atoms=atoms,
+        atoms_opt=atoms_opt,
+        converged=converged,
+        modified=False,
+        properties=properties,
+        update_cell=update_cell,
+    )
 
     # Write image.
     if write_images is True:
@@ -448,7 +497,8 @@ def run_climbfixint_calculation(
     update_cell=False,
     logfile='-',
     fmax=0.05,
-    steps_max=500,
+    max_steps=500,
+    min_steps=None,
     optB_kwargs={'logfile': '-', 'trajectory': None},
     max_displacement=None,
     max_forces=20.,
@@ -471,15 +521,15 @@ def run_climbfixint_calculation(
         trajname = os.path.join(directory, f'{label}.traj')
     
     # Create a copy of the atoms object to not mess with constraints.
-    atoms_copy = atoms.copy()
-    atoms_copy.calc = calc
+    atoms_opt = atoms.copy()
+    atoms_opt.calc = calc
     
     bonds = [[None, bond[:2]] for bond in bonds_TS]
-    atoms_copy.set_constraint([FixInternals(bonds=bonds)]+atoms.constraints)
+    atoms_opt.set_constraint([FixInternals(bonds=bonds)]+atoms.constraints)
     
     # We use an ODE solver to improve convergence.
     opt = BFGSClimbFixInternals(
-        atoms=atoms_copy,
+        atoms=atoms_opt,
         logfile=logfile,
         trajectory=trajname,
         index_constr2climb=index_constr2climb,
@@ -489,16 +539,26 @@ def run_climbfixint_calculation(
     # Observer that checks the displacement of the ts from the starting position.
     if max_displacement:
         def check_displacement():
-            displ = np.linalg.norm(atoms_copy.positions-atoms.positions)
+            displ = np.linalg.norm(atoms_opt.positions-atoms.positions)
             if displ > max_displacement:
                 raise RuntimeError("atoms displaced too much")
-        opt.insert_observer(function=check_displacement, interval=10)
+        opt.attach(function=check_displacement, interval=10)
     
+    # Observer to stop the calculation if the maximum force is too high.
     if max_forces:
         def check_max_forces():
-            if (atoms_copy.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
+            if (atoms_opt.get_forces() ** 2).sum(axis=1).max() > max_forces ** 2:
                 raise RuntimeError("max force too high")
-        opt.insert_observer(function=check_max_forces, interval=5)
+        opt.attach(function=check_max_forces, interval=5)
+    
+    # Observer to set a minimum number of steps.
+    if min_steps:
+        def set_min_steps(opt=opt):
+            if opt.nsteps >= min_steps:
+                opt.fmax = fmax
+            else:
+                opt.fmax = 0.
+        opt.attach(set_min_steps, interval=1)
     
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
@@ -506,22 +566,21 @@ def run_climbfixint_calculation(
     
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=steps_max)
+        opt.run(fmax=fmax, steps=max_steps)
         converged = opt.converged()
     except Exception as error:
         print(error)
         converged = False
     
-    # Update the input atoms with the results.
-    atoms.set_positions(atoms_copy.positions)
-    if update_cell is True:
-        atoms.set_cell(atoms_copy.cell)
-    results = filter_results(results=atoms_copy.calc.results, properties=properties)
-    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
-    atoms.info["modified"] = False
-    atoms.info["converged"] = bool(converged)
-    if "counter" in dir(calc):
-        atoms.info["counter"] = calc.counter
+    # Update the input atoms with the results of the calculation.
+    atoms = update_atoms_from_atoms_opt(
+        atoms=atoms,
+        atoms_opt=atoms_opt,
+        converged=converged,
+        modified=False,
+        properties=properties,
+        update_cell=update_cell,
+    )
 
     # Write image.
     if write_images is True:
@@ -543,7 +602,8 @@ def run_sella_calculation(
     update_cell=False,
     logfile='-',
     fmax=0.05,
-    steps_max=500,
+    max_steps=500,
+    min_steps=None,
     properties=["energy", "forces"],
     **kwargs,
 ):
@@ -559,20 +619,29 @@ def run_sella_calculation(
     if save_trajs is True:
         trajname = os.path.join(directory, f'{label}.traj')
 
-    atoms_copy = atoms.copy()
-    atoms_copy.calc = calc
-    indices = get_indices_not_fixed(atoms_copy, return_mask=False)
+    atoms_opt = atoms.copy()
+    atoms_opt.calc = calc
+    indices = get_indices_not_fixed(atoms_opt, return_mask=False)
     
-    atoms_copy.constraints = []
-    constraints = Constraints(atoms_copy)
+    atoms_opt.constraints = []
+    constraints = Constraints(atoms_opt)
     constraints.fix_translation(indices)
     
     opt = Sella(
-        atoms=atoms_copy,
+        atoms=atoms_opt,
         constraints=constraints,
         trajectory=trajname,
         logfile=logfile,
     )
+    
+    # Observer to set a minimum number of steps.
+    if min_steps:
+        def set_min_steps(opt=opt):
+            if opt.nsteps >= min_steps:
+                opt.fmax = fmax
+            else:
+                opt.fmax = 0.
+        opt.attach(set_min_steps, interval=1)
     
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
@@ -580,22 +649,21 @@ def run_sella_calculation(
     
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=steps_max)
+        opt.run(fmax=fmax, steps=max_steps)
         converged = opt.converged()
     except Exception as error:
         print(error)
         converged = False
     
-    # Update the input atoms with the results.
-    atoms.set_positions(atoms_copy.positions)
-    if update_cell is True:
-        atoms.set_cell(atoms_copy.cell)
-    results = filter_results(results=atoms_copy.calc.results, properties=properties)
-    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
-    atoms.info["modified"] = False
-    atoms.info["converged"] = bool(converged)
-    if "counter" in dir(calc):
-        atoms.info["counter"] = calc.counter
+    # Update the input atoms with the results of the calculation.
+    atoms = update_atoms_from_atoms_opt(
+        atoms=atoms,
+        atoms_opt=atoms_opt,
+        converged=converged,
+        modified=False,
+        properties=properties,
+        update_cell=update_cell,
+    )
 
     # Write image.
     if write_images is True:
@@ -633,8 +701,8 @@ def run_vibrations_calculation(
         os.makedirs(directory, exist_ok=True)
 
     # Initialize the vibrations calculation.
-    atoms_copy = atoms.copy()
-    atoms_copy.calc = calc
+    atoms_vib = atoms.copy()
+    atoms_vib.calc = calc
     
     class VibrationsWithEnergy(Vibrations):
         def calculate(self, atoms, disp):
@@ -648,7 +716,7 @@ def run_vibrations_calculation(
             return self.calc.results
     
     vib = VibrationsWithEnergy(
-        atoms=atoms_copy,
+        atoms=atoms_vib,
         indices=indices,
         name=label,
         delta=delta,

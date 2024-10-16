@@ -4,10 +4,7 @@
 
 from ase.db import connect
 from arkimede.workflow.reaction_workflow import run_ase_calculations_mechanism
-from arkimede.workflow.utilities import (
-    get_atoms_list_from_db_metadata,
-    read_step_actlearn,
-)
+from arkimede.utilities import get_atoms_list_from_db_metadata, read_step_actlearn
 from arkimede.ocp.ocp_utils import get_checkpoint_path, get_checkpoint_path_actlearn
 from arkimede.ocp.ocp_calc import OCPCalculatorCounter
 
@@ -32,10 +29,10 @@ def main():
     db_ase_append = True
 
     # Calculations parameters.
-    fmax = 0.01 # 0.05
-    steps_max_relax = 1000
-    steps_max_neb = 10
-    steps_max_ts_search = 1000
+    fmax = 0.05
+    max_steps_relax = 0
+    max_steps_neb = 10
+    max_steps_ts_search = 1000
     n_images_neb = 10
     search_TS = "climbbonds" # dimer | climbbonds | climbfixint | sella
 
@@ -86,9 +83,9 @@ def main():
         calc=calc,
         db_ase=db_ase,
         fmax=fmax,
-        steps_max_relax=steps_max_relax,
-        steps_max_neb=steps_max_neb,
-        steps_max_ts_search=steps_max_ts_search,
+        max_steps_relax=max_steps_relax,
+        max_steps_neb=max_steps_neb,
+        max_steps_ts_search=max_steps_ts_search,
         n_images_neb=n_images_neb,
         search_TS=search_TS,
         save_trajs=save_trajs,

@@ -6,20 +6,6 @@ import numpy as np
 from ocpmodels.common.relaxation.ase_utils import OCPCalculator
 
 # -------------------------------------------------------------------------------------
-# CALCULATOR COUNTER
-# -------------------------------------------------------------------------------------
-
-class CalculatorCounter(object):
-        
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.counter = 0
-    
-    def calculate(self, **kwargs):
-        super().calculate(**kwargs)
-        self.counter += 1
-
-# -------------------------------------------------------------------------------------
 # OCP CALCULATOR COUNTER
 # -------------------------------------------------------------------------------------
 

@@ -6,8 +6,8 @@ import os
 import numpy as np
 from ase.gui.gui import GUI
 from ase.db import connect
-from arkimede.workflow.utilities import write_atoms_to_db, get_db_metadata
-from arkimede.workflow.reaction_workflow import MechanismCalculator
+from arkimede.utilities import write_atoms_to_db, get_db_metadata
+from arkimede.workflow.reaction_mechanism import MechanismCalculator
 
 # -------------------------------------------------------------------------------------
 # MAIN
@@ -44,10 +44,10 @@ def main():
     element_bulk_list = [
         "Rh",
         #"Cu",
-        #"Pd",
         #"Co",
         #"Ni",
-        #"Au",
+        #"Fe",
+        #"Mn",
     ]
     miller_index_list = [
         "100",
@@ -192,7 +192,8 @@ def main():
     ]
     
     # Initialize ase database.
-    os.makedirs(os.path.split(db_init_name)[0], exist_ok=True)
+    if len(os.path.split(db_init_name)[0]) > 0:
+        os.makedirs(os.path.split(db_init_name)[0], exist_ok=True)
     db_init = connect(name=db_init_name, append=db_init_append)
     
     # Store structures names as metadata in the database.

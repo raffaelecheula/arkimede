@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ase.db import connect
 from ase.gui.gui import GUI
-from arkimede.workflow.utilities import get_atoms_list_from_db
+from arkimede.utilities import get_atoms_list_from_db
 
 # -------------------------------------------------------------------------------------
 # MAIN
