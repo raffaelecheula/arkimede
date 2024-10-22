@@ -3,7 +3,7 @@
 # -------------------------------------------------------------------------------------
 
 import numpy as np
-from ase.calculators.singlepoint import SinglePointCalculator
+from ase.optimize import LBFGS
 
 # -------------------------------------------------------------------------------------
 # GET IDPP INTERPOLATED IMAGES
@@ -15,12 +15,16 @@ def get_idpp_interpolated_images(
     n_images=10,
     label='idpp',
     fmax=0.01,
+    traj=None,
+    log=None, 
+    optimizer=LBFGS,
+    mic=False,
     steps_max=1000,
     save_trajs=False,
+    from_atoms_info=False,
 ):
     """Get idpp interpolated images with strict optimization parameters."""
     from ase.neb import NEB, idpp_interpolate
-    from ase.optimize import LBFGS
     from ase.io import Trajectory
     images = [atoms_IS.copy()]
     images += [atoms_IS.copy() for i in range(n_images-2)]
@@ -29,11 +33,11 @@ def get_idpp_interpolated_images(
     neb.interpolate()
     idpp_interpolate(
         images=images,
-        traj=None,
-        log=None, 
+        traj=traj,
+        log=log, 
         fmax=fmax,
-        optimizer=LBFGS,
-        mic=False,
+        optimizer=optimizer,
+        mic=mic,
         steps=steps_max,
     )
     if save_trajs is True:
@@ -50,7 +54,8 @@ def get_idpp_interpolated_images(
 def get_atoms_TS_from_images_neb(images, atoms_TS=None, index_TS=None):
     """Get the atoms of the TS guess and the vector for dimer calculation 
     from the NEB images."""
-
+    from ase.calculators.singlepoint import SinglePointCalculator
+    from arkimede.utilities import filter_results
     images_energies = [atoms.get_potential_energy() for atoms in images]
     if index_TS is None:
         index_TS = np.argmax(images_energies)
@@ -61,15 +66,13 @@ def get_atoms_TS_from_images_neb(images, atoms_TS=None, index_TS=None):
         atoms_TS.set_positions(images[index_TS].positions)
         atoms_TS.info["modified"] = images[index_TS].info["modified"]
         atoms_TS.info["converged"] = images[index_TS].info["converged"]
-        atoms_TS.calc = SinglePointCalculator(
-            atoms=atoms_TS,
-            energy=images[index_TS].get_potential_energy(),
-            forces=images[index_TS].get_forces(),
-        )
+        results = filter_results(results=images[index_TS].calc.results)
+        atoms_TS.calc = SinglePointCalculator(atoms=atoms_TS, **results)
     
+    images_positions = np.vstack([atoms.positions.copy() for atoms in images])
     atoms_TS.info.update({
-        "images_positions": np.vstack([atoms.positions.copy() for atoms in images]),
-        "images_energies": [atoms.get_potential_energy() for atoms in images],
+        "images_positions": images_positions,
+        "images_energies": images_energies,
     })
     
     vector = get_vector_from_images(images, index_TS)
@@ -83,16 +86,14 @@ def get_atoms_TS_from_images_neb(images, atoms_TS=None, index_TS=None):
 
 def fix_atoms_FS_mic(atoms_IS, atoms_FS):
     """Fix atoms positions of FS according to the minimum image convention."""
-    from ase.geometry import get_distances
+    from ase.geometry import find_mic
     for ii in range(len(atoms_IS)):
-        displ, _ = get_distances(
-            p1=atoms_IS[ii].position,
-            p2=atoms_FS[ii].position,
-            cell=atoms_IS.cell,
-            pbc=True,
-        )
-        displ_tot = displ[0] if ii == 0 else np.vstack([displ_tot, displ[0]])
+        v_diff = atoms_FS[ii].position-atoms_IS[ii].position
+        displ, _ = find_mic(v=v_diff, cell=atoms_IS.cell, pbc=True)
+        displ_tot = displ if ii == 0 else np.vstack([displ_tot, displ])
     atoms_FS.positions = atoms_IS.positions+displ_tot
+    if atoms_FS.calc:
+        atoms_FS.calc.atoms = atoms_FS
 
 # -------------------------------------------------------------------------------------
 # GET VECTOR FROM IMAGES
@@ -139,6 +140,8 @@ def get_vector_from_bonds_TS(
 
 def get_images_neb_from_atoms_TS(atoms_TS):
     """Get images from atoms TS (with images positions and energies in info)."""
+    from ase.calculators.singlepoint import SinglePointCalculator
+    from arkimede.utilities import filter_results
     images_energies = atoms_TS.info["images_energies"]
     images_positions = np.split(
         atoms_TS.info["images_positions"], len(images_energies)

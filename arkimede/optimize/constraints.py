@@ -4,7 +4,7 @@
 
 import numpy as np
 from ase.constraints import FixConstraint
-from ase.geometry import find_mic
+from ase.geometry import find_mic, get_distances
 from ase.neighborlist import (
     NeighborList,
     NewPrimitiveNeighborList,
@@ -14,7 +14,6 @@ from ase.neighborlist import (
 # -------------------------------------------------------------------------------------
 # PROPAGATE FORCES
 # -------------------------------------------------------------------------------------
-
 
 class PropagateForces(FixConstraint):
     
@@ -72,43 +71,49 @@ class PropagateForces(FixConstraint):
         }
 
 # -------------------------------------------------------------------------------------
-# DOUBLE HOOKEAN
+# MIN BOND LENGTH
 # -------------------------------------------------------------------------------------
-
 
 class DoubleHookean(FixConstraint):
     
     def __init__(
         self,
         indices,
+        bondlength,
         thr_min,
         thr_max,
         k_spring,
     ):
         self.indices = indices
+        self.bondlength = bondlength
         self.thr_min = thr_min
         self.thr_max = thr_max
         self.k_spring = k_spring
+        self.too_short = False
+        self.too_long = False
 
     def get_removed_dof(self, atoms):
         return 0
 
     def adjust_forces(self, atoms, forces):
-        pos1, pos2 = atoms.positions[self.indices]
-        difference = find_mic(pos1 - pos2, atoms.cell, atoms.pbc)[0]
-        bondlength = np.linalg.norm(difference)
-        if bondlength > self.thr_max:
-            magnitude = self.k_spring * (bondlength - self.thr_max)
-            direction = difference / np.linalg.norm(bondlength)
-            forces[self.indices[0]] += direction * magnitude
-            forces[self.indices[1]] -= direction * magnitude
-        elif bondlength < self.thr_min:
-            magnitude = self.k_spring * (self.thr_min - bondlength)
-            direction = difference / np.linalg.norm(bondlength)
-            forces[self.indices[0]] += direction * magnitude
-            forces[self.indices[1]] -= direction * magnitude
+        p1, p2 = atoms.positions[self.indices]
+        displ, bondlength = find_mic(p1-p2, cell=atoms.cell, pbc=True)
+        if bondlength/self.bondlength < self.thr_min:
+            self.too_short = True
+        elif bondlength/self.bondlength > self.thr_max:
+            self.too_long = True
+        if self.too_short is True and bondlength > self.bondlength:
+            self.too_short = False
+        if self.too_long is True and bondlength < self.bondlength:
+            self.too_long = False
+        # Add restoring force.
+        if self.too_short is True or self.too_long is True:
+            magnitude = self.k_spring * (bondlength - self.bondlength)
+            direction = displ / bondlength
+            forces[self.indices[0]] -= direction * magnitude
+            forces[self.indices[1]] += direction * magnitude
 
-    def adjust_positions(self, atoms, forces):
+    def adjust_positions(self, atoms, positions):
         pass
 
     def todict(self):
@@ -116,6 +121,7 @@ class DoubleHookean(FixConstraint):
             "name": "DoubleHookean",
             "kwargs": {
                 "indices": self.indices,
+                "bondlength": self.bondlength,
                 "thr_min": self.thr_min,
                 "thr_max": self.thr_max,
                 "k_spring": self.k_spring,
@@ -126,37 +132,27 @@ class DoubleHookean(FixConstraint):
 # SET DOUBLEHOOKEANS
 # -------------------------------------------------------------------------------------
 
-
 def set_doublehookeans(
     atoms,
-    indices,
-    mult_nlist=1.25,
-    mult_thr_min=0.65,
-    mult_thr_max=1.25,
-    k_spring=10.,
+    bonds_TS,
+    indices_ads,
+    thr_min=0.85,
+    thr_max=2.00,
+    k_spring=100.,
 ):
     
-    cutoffs = natural_cutoffs(atoms=atoms, mult=mult_nlist)
-    nlist = NeighborList(
-        cutoffs=cutoffs,
-        skin=0.3,
-        self_interaction=False,
-        bothways=False,
-        primitive=NewPrimitiveNeighborList,
-    )
-    nlist.update(atoms)
-    for a1, a2 in nlist.get_connectivity_matrix().keys():
-        if a1 not in indices or a2 not in indices:
-            continue
+    cutoffs = natural_cutoffs(atoms=atoms, mult=1.)
+    for bond in bonds_TS:
+        a1, a2 = bond[:2]
         atoms.constraints.append(
             DoubleHookean(
                 indices=[a1, a2],
+                bondlength=cutoffs[a1]+cutoffs[a2],
+                thr_min=thr_min,
+                thr_max=thr_max,
                 k_spring=k_spring,
-                thr_min=(cutoffs[a1]+cutoffs[a2])*mult_thr_min,
-                thr_max=(cutoffs[a1]+cutoffs[a2])*mult_thr_max,
             )
         )
-
 
 # -------------------------------------------------------------------------------------
 # END

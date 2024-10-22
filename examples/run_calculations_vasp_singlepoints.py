@@ -37,6 +37,10 @@ def main():
     db_dft_name = f"databases/vasp_{step_actlearn:02d}.db"
     db_dft_append = True
     
+    # Keywords used to match structures in the db and to be stored in db columns.
+    keys_match = ["name", "calculation"]
+    keys_store = ["name", "calculation", "status", "name_ref", "species"]
+    
     # Name of the folder for dft single point calculations.
     basedir_dft_calc = f"calculations/vasp_{step_actlearn:02d}"
     
@@ -103,6 +107,8 @@ def main():
         check_finished_fun=check_finished_vasp,
         job_queued_fun=job_queued_k8s,
         command=vasp_command,
+        keys_match=keys_match,
+        keys_store=keys_store,
     )
 
 # -------------------------------------------------------------------------------------

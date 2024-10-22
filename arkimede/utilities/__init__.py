@@ -11,11 +11,8 @@ from .atoms import (
     check_same_connectivity,
     get_atoms_min_energy,
     get_atoms_max_energy,
-    filter_results,
-    update_atoms_from_atoms_opt,
-    get_atoms_too_close,
 )
-from .nebs import (
+from .transtates import (
     get_idpp_interpolated_images,
     get_atoms_TS_from_images_neb,
     fix_atoms_FS_mic,
@@ -29,13 +26,15 @@ from .nebs import (
 from .databases import (
     write_atoms_to_db,
     read_atoms_from_db,
-    get_status_calculation,
-    print_results_calculation,
     filter_constraints,
     get_metadata_reaction,
     get_db_metadata,
     get_atoms_list_from_db_metadata,
     get_atoms_list_from_db,
+    filter_results,
+    update_atoms_from_atoms_opt,
+    get_status_calculation,
+    print_results_calculation,
     update_info_TS_combo,
     update_info_TS_from_IS,
     update_info_TS_from_FS,

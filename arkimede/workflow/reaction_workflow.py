@@ -5,6 +5,12 @@
 import os
 import yaml
 import numpy as np
+from arkimede.utilities import (
+    read_atoms_from_db,
+    write_atoms_to_db,
+    print_results_calculation,
+    update_info_TS_combo,
+)
 
 # -------------------------------------------------------------------------------------
 # RUN ASE CALCULATIONS MECHANISM
@@ -25,15 +31,19 @@ def run_ase_calculations_mechanism(
     save_trajs=False,
     write_images=False,
     basedir_trajs="calculations",
-    update_info_TS_fun=None,
+    update_info_TS_fun=update_info_TS_combo,
+    images_from_atoms_info=False,
     check_modified_relax=False,
     check_modified_neb=False,
     check_modified_TS_search=False,
-    keys_match=None,
-    keys_store=None,
+    keys_match=["name", "calculation"],
+    keys_store=["name", "name_ref", "species", "calculation", "status"],
     kwargs_relax={},
     kwargs_neb={},
     kwargs_ts_search={},
+    kwargs_check={},
+    kwargs_vib={},
+    kwargs_idpp={},
     kwargs_read_db={},
     kwargs_write_db={},
 ):
@@ -49,72 +59,104 @@ def run_ase_calculations_mechanism(
         get_atoms_TS_from_images_neb,
         get_new_IS_and_FS_from_images,
         get_new_IS_and_FS_from_atoms_TS,
-        read_atoms_from_db,
-        write_atoms_to_db,
         update_clean_slab_positions,
-        print_results_calculation,
         get_images_neb_from_atoms_TS,
-        update_info_TS_combo,
         check_same_connectivity,
     )
 
-    # Update kwargs.
-    kwargs_read_db.update({"db_ase": db_ase})
-    kwargs_write_db.update({"db_ase": db_ase})
-    if keys_match is not None:
-        kwargs_read_db.update({"keys_match": keys_match})
-        kwargs_write_db.update({"keys_match": keys_match})
-    if keys_store is not None:
-        kwargs_write_db.update({"keys_store": keys_store})
-
-    if update_info_TS_fun is None:
-        update_info_TS_fun = update_info_TS_combo
+    # Kwargs for read_atoms_from_db.
+    kwargs_all_read_db = {
+        "db_ase": db_ase,
+        "keys_match": keys_match,
+    }
+    kwargs_all_read_db.update(kwargs_read_db)
+    # Kwargs for write_atoms_to_db.
+    kwargs_all_write_db = {
+        "db_ase": db_ase,
+        "keys_match": keys_match,
+        "keys_store": keys_store,
+    }
+    kwargs_all_write_db.update(kwargs_write_db)
+    # Kwargs for run_relax_calculation.
+    kwargs_all_relax = {
+        "calc": calc,
+        "fmax": fmax,
+        "max_steps": max_steps_relax,
+        "save_trajs": save_trajs,
+        "write_images": write_images,
+    }
+    kwargs_all_relax.update(kwargs_relax)
+    # Kwargs for run_neb_calculation.
+    kwargs_all_neb = {
+        "calc": calc,
+        "fmax": fmax,
+        "max_steps": max_steps_neb,
+        "save_trajs": save_trajs,
+        "write_images": write_images,
+    }
+    kwargs_all_neb.update(kwargs_neb)
+    # Kwargs for run_calculation (TS search).
+    kwargs_all_ts_search = {
+        "calc": calc,
+        "fmax": fmax,
+        "max_steps": max_steps_ts_search,
+        "save_trajs": save_trajs,
+        "write_images": write_images,
+    }
+    kwargs_all_ts_search.update(kwargs_ts_search)
+    # Kwargs for run_relax_calculation.
+    kwargs_all_check = {
+        "calc": calc,
+        "fmax": fmax,
+        "max_steps": max_steps_relax,
+        "save_trajs": save_trajs,
+        "write_images": write_images,
+    }
+    kwargs_all_check.update(kwargs_check)
+    # Kwargs for run_calculation (TS search).
+    kwargs_all_vib = {
+        "calc": calc,
+        "remove_cache": True,
+        "save_trajs": False,
+    }
+    kwargs_all_vib.update(kwargs_vib)
+    # Kwargs for get_idpp_interpolated_images.
+    kwargs_all_idpp = {
+        "n_images": n_images_neb,
+        "save_trajs": False,
+    }
+    kwargs_all_idpp.update(kwargs_idpp)
 
     # Relax clean slabs.
     for atoms in atoms_clean_tot:
         atoms.info["calculation"] = "relax"
-        if read_atoms_from_db(atoms=atoms, **kwargs_read_db) is None:
+        if read_atoms_from_db(atoms=atoms, **kwargs_all_read_db) is None:
             run_relax_calculation(
                 atoms=atoms,
-                calc=calc,
-                fmax=fmax,
-                max_steps=max_steps_relax,
                 directory=os.path.join(basedir_trajs, atoms.info["name"]),
-                save_trajs=save_trajs,
-                write_images=write_images,
-                **kwargs_relax,
+                **kwargs_all_relax,
             )
-            write_atoms_to_db(atoms=atoms, **kwargs_write_db)
+            write_atoms_to_db(atoms=atoms, **kwargs_all_write_db)
         print_results_calculation(atoms=atoms)
 
     # Relax slabs with adsorbates.
     for atoms in atoms_ads_tot:
         atoms.info["calculation"] = "relax"
-        if read_atoms_from_db(atoms=atoms, **kwargs_read_db) is None:
+        if read_atoms_from_db(atoms=atoms, **kwargs_all_read_db) is None:
             update_clean_slab_positions(atoms=atoms, db_ase=db_ase)
             atoms_copy = atoms.copy()
             run_relax_calculation(
                 atoms=atoms,
-                calc=calc,
-                fmax=fmax,
-                max_steps=max_steps_relax,
                 directory=os.path.join(basedir_trajs, atoms.info["name"]),
-                save_trajs=save_trajs,
-                write_images=write_images,
-                **kwargs_relax,
+                **kwargs_all_relax,
             )
             if check_modified_relax is True:
                 if check_same_connectivity(atoms_copy, atoms) is False:
                     atoms.info["modified"] = True
             # Calculate vibrations.
             if atoms.info["converged"] and "vib_energies" not in atoms.info:
-                run_vibrations_calculation(
-                    atoms=atoms,
-                    calc=calc,
-                    remove_cache=True,
-                    save_trajs=False,
-                )
-            write_atoms_to_db(atoms=atoms, **kwargs_write_db)
+                run_vibrations_calculation(atoms=atoms, **kwargs_all_vib)
+            write_atoms_to_db(atoms=atoms, **kwargs_all_write_db)
         print_results_calculation(atoms=atoms)
 
     # Calculate transition states of the reactions.
@@ -132,86 +174,69 @@ def run_ase_calculations_mechanism(
         # Relax initial and final states.
         for ss, atoms in {"IS_0": atoms_IS, "FS_0": atoms_FS}.items():
             atoms.info["calculation"] = "relax"
-            if read_atoms_from_db(atoms=atoms, **kwargs_read_db) is None:
+            if read_atoms_from_db(atoms=atoms, **kwargs_all_read_db) is None:
                 update_clean_slab_positions(atoms=atoms, db_ase=db_ase)
                 run_relax_calculation(
                     atoms=atoms,
-                    calc=calc,
-                    fmax=fmax,
-                    max_steps=max_steps_relax,
                     label=f'relax_{ss}',
                     directory=directory,
-                    save_trajs=save_trajs,
-                    write_images=write_images,
-                    **kwargs_relax,
+                    **kwargs_all_relax,
                 )
-                write_atoms_to_db(atoms=atoms, **kwargs_write_db)
+                write_atoms_to_db(atoms=atoms, **kwargs_all_write_db)
             print_results_calculation(atoms=atoms)
 
         # Run the NEB calculation.
         atoms_TS.info["calculation"] = "neb"
-        if read_atoms_from_db(atoms=atoms_TS, **kwargs_read_db) is None:
-            images = get_idpp_interpolated_images(
-                atoms_IS=atoms_IS,
-                atoms_FS=atoms_FS,
-                n_images=n_images_neb,
-                save_trajs=False,
-            )
+        if read_atoms_from_db(atoms=atoms_TS, **kwargs_all_read_db) is None:
+            if images_from_atoms_info:
+                images = get_images_neb_from_atoms_TS(atoms_TS=atoms_IS)
+            else:
+                images = get_idpp_interpolated_images(
+                    atoms_IS=atoms_IS,
+                    atoms_FS=atoms_FS,
+                    **kwargs_all_idpp,
+                )
             run_neb_calculation(
                 images=images,
-                calc=calc,
-                max_steps=max_steps_neb,
-                fmax=fmax,
                 directory=directory,
-                save_trajs=save_trajs,
-                write_images=write_images,
-                **kwargs_neb,
+                **kwargs_all_neb,
             )
             get_atoms_TS_from_images_neb(images=images, atoms_TS=atoms_TS)
 
             # Check if relaxing the TS gives the initial IS and FS.
-            if check_modified_neb is True:
+            if atoms_TS.info["converged"] and check_modified_neb:
                 atoms_IS_1, atoms_FS_1 = get_new_IS_and_FS_from_images(images=images)
                 for ss, atoms in {"IS": atoms_IS_1, "FS": atoms_FS_1}.items():
                     run_relax_calculation(
                         atoms=atoms,
-                        calc=calc,
-                        fmax=fmax,
-                        max_steps=max_steps_relax,
                         label=f"relax_{ss}_1",
                         directory=directory,
-                        save_trajs=save_trajs,
-                        write_images=write_images,
-                        **kwargs_relax,
+                        **kwargs_all_check,
                     )
                 check_IS = check_same_connectivity(atoms_IS, atoms_IS_1)
                 check_FS = check_same_connectivity(atoms_FS, atoms_FS_1)
                 if bool(check_IS*check_FS) is False:
                     atoms_TS.info["modified"] = True
             
-            write_atoms_to_db(atoms=atoms_TS, **kwargs_write_db)
+            write_atoms_to_db(atoms=atoms_TS, **kwargs_all_write_db)
         print_results_calculation(atoms=atoms_TS)
 
-        # If NEB is not converged, do a TS search calculation.
-        if atoms_TS.info["converged"] is False and atoms_TS.info["modified"] is False:
+        # Run the TS search calculation.
+        if search_TS is not None:
 
             atoms_TS.info["calculation"] = search_TS
-            if read_atoms_from_db(atoms=atoms_TS, **kwargs_read_db) is None:
+            if read_atoms_from_db(atoms=atoms_TS, **kwargs_all_read_db) is None:
+                images = get_images_neb_from_atoms_TS(atoms_TS=atoms_TS)
                 run_calculation(
                     atoms=atoms_TS,
-                    calc=calc,
                     calculation=search_TS,
-                    max_steps=max_steps_ts_search,
                     bonds_TS=bonds_TS,
-                    fmax=fmax,
                     directory=directory,
-                    save_trajs=save_trajs,
-                    write_images=write_images,
-                    **kwargs_ts_search,
+                    **kwargs_all_ts_search,
                 )
 
                 # Check if relaxing the TS gives the initial IS and FS.
-                if check_modified_TS_search is True:
+                if atoms_TS.info["converged"] and check_modified_TS_search:
                     atoms_IS_2, atoms_FS_2 = get_new_IS_and_FS_from_atoms_TS(
                         atoms_TS=atoms_TS,
                         bonds_TS=bonds_TS,
@@ -219,33 +244,23 @@ def run_ase_calculations_mechanism(
                     for ss, atoms in {"IS": atoms_IS_2, "FS": atoms_FS_2}.items():
                         run_relax_calculation(
                             atoms=atoms,
-                            calc=calc,
-                            fmax=fmax,
-                            max_steps=max_steps_relax,
                             label=f'relax_{ss}_2',
                             directory=directory,
-                            save_trajs=save_trajs,
-                            write_images=write_images,
-                            **kwargs_relax,
+                            **kwargs_all_check,
                         )
                     check_IS = check_same_connectivity(atoms_IS, atoms_IS_2)
                     check_FS = check_same_connectivity(atoms_FS, atoms_FS_2)
                     if bool(check_IS*check_FS) is False:
                         atoms_TS.info["modified"] = True
 
-                write_atoms_to_db(atoms=atoms_TS, **kwargs_write_db)
+                write_atoms_to_db(atoms=atoms_TS, **kwargs_all_write_db)
             print_results_calculation(atoms=atoms_TS)
 
         # If the TS is found, calculate vibrations.
         if atoms_TS.info["converged"] and atoms_TS.info["modified"] is False:
             if "vib_energies" not in atoms_TS.info:
-                run_vibrations_calculation(
-                    atoms=atoms_TS,
-                    calc=calc,
-                    remove_cache=True,
-                    save_trajs=False,
-                )
-                write_atoms_to_db(atoms=atoms_TS, **kwargs_write_db)
+                run_vibrations_calculation(atoms=atoms_TS, **kwargs_all_vib)
+                write_atoms_to_db(atoms=atoms_TS, **kwargs_all_write_db)
 
 # -------------------------------------------------------------------------------------
 # RUN DFT CALCULATIONS K8S
@@ -268,28 +283,28 @@ def run_dft_calculations_k8s(
     mem_req='8Gi',
     mem_lim='24Gi',
     write_all_to_db=False,
-    keys_match=None,
-    keys_store=None,
+    keys_match=["name", "calculation"],
+    keys_store=["name", "name_ref", "species", "calculation", "status"],
     kwargs_read_db={},
     kwargs_write_db={},
-    **kwargs,
+    kwargs_read_out={},
 ):
     
     from arkimede.workflow.dft_calculations import submit_k8s
-    from arkimede.utilities import (
-        read_atoms_from_db,
-        write_atoms_to_db,
-        print_results_calculation,
-    )
     
-    # Update kwargs.
-    kwargs_read_db.update({"db_ase": db_dft})
-    kwargs_write_db.update({"db_ase": db_dft})
-    if keys_match is not None:
-        kwargs_read_db.update({"keys_match": keys_match})
-        kwargs_write_db.update({"keys_match": keys_match})
-    if keys_store is not None:
-        kwargs_write_db.update({"keys_store": keys_match})
+    # Kwargs for read_atoms_from_db.
+    kwargs_all_read_db = {
+        "db_ase": db_dft,
+        "keys_match": keys_match,
+    }
+    kwargs_all_read_db.update(kwargs_read_db)
+    # Kwargs for write_atoms_to_db.
+    kwargs_all_write_db = {
+        "db_ase": db_dft,
+        "keys_match": keys_match,
+        "keys_store": keys_store,
+    }
+    kwargs_all_write_db.update(kwargs_write_db)
     
     # Read the template yaml file.
     with open(template_yaml, 'r') as fileobj:
@@ -299,20 +314,20 @@ def run_dft_calculations_k8s(
     cwd = os.getcwd()
     for atoms in atoms_list:
         atoms.info["converged"] = False
-        if read_atoms_from_db(atoms=atoms, **kwargs_read_db) is None:
+        if read_atoms_from_db(atoms=atoms, **kwargs_all_read_db) is None:
             directory = os.path.join(basedir_dft_calc, atoms.info["name"])
             os.makedirs(directory, exist_ok=True)
             os.chdir(directory)
             if os.path.isfile(filename_out) and check_finished_fun(filename_out):
-                atoms_all = read_output_fun(atoms=atoms, **kwargs)
+                atoms_all = read_output_fun(atoms=atoms, **kwargs_read_out)
                 if atoms.info["converged"] is True:
                     if isinstance(atoms_all, list) and write_all_to_db is True:
                         for atoms_ii in atoms_all:
                             atoms_ii.set_tags(np.ones(len(atoms_ii)))
-                            write_atoms_to_db(atoms=atoms_ii, **kwargs_write_db)
+                            write_atoms_to_db(atoms=atoms_ii, **kwargs_all_write_db)
                     else:
                         atoms.set_tags(np.ones(len(atoms)))
-                        write_atoms_to_db(atoms=atoms, **kwargs_write_db)
+                        write_atoms_to_db(atoms=atoms, **kwargs_all_write_db)
             elif job_queued_fun(atoms.info["name"]) is False:
                 write_input_fun(atoms)
                 submit_k8s(

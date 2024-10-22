@@ -28,9 +28,13 @@ def main():
     db_ase_name = f"databases/ocp_{step_actlearn:02d}.db"
     db_ase_append = True
 
+    # Keywords used to match structures in the db and to be stored in db columns.
+    keys_match = ["name", "calculation"]
+    keys_store = ["name", "calculation", "status", "name_ref", "species"]
+
     # Calculations parameters.
     fmax = 0.05
-    max_steps_relax = 0
+    max_steps_relax = 500
     max_steps_neb = 10
     max_steps_ts_search = 1000
     n_images_neb = 10
@@ -91,6 +95,8 @@ def main():
         save_trajs=save_trajs,
         write_images=write_images,
         basedir_trajs=basedir_trajs,
+        keys_match=keys_match,
+        keys_store=keys_store,
     )
 
 # -------------------------------------------------------------------------------------

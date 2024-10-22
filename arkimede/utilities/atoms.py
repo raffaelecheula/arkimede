@@ -3,7 +3,6 @@
 # -------------------------------------------------------------------------------------
 
 import numpy as np
-from ase.calculators.singlepoint import SinglePointCalculator, all_properties
 
 # -------------------------------------------------------------------------------------
 # GET INDICES FIXED
@@ -42,7 +41,7 @@ def get_indices_adsorbate(atoms, return_mask=False):
     """Get indices of atoms adsorbate."""
     if "indices_ads" in atoms.info:
         indices = atoms.info["indices_ads"]
-    elif "n_atoms_clean" in atoms.info: # maybe remove this option?
+    elif "n_atoms_clean" in atoms.info: # TODO: remove this option?
         indices = list(range(len(atoms)))[atoms.info["n_atoms_clean"]:]
     else:
         raise RuntimeError("Cannot calculate atoms not surface.")
@@ -74,11 +73,30 @@ def get_edges_list(atoms, indices=None, dist_ratio_thr=1.25):
     return edges_list
 
 # -------------------------------------------------------------------------------------
+# GET CONNECTVITY
+# -------------------------------------------------------------------------------------
+
+def get_connectivity(atoms, edges_list=None, indices=None, dist_ratio_thr=1.25):
+    """Get the connectivity matrix for selected atoms in an ase Atoms object."""
+    if edges_list is None:
+        edges_list = get_edges_list(
+            atoms=atoms,
+            indices=indices,
+            dist_ratio_thr=dist_ratio_thr,
+        )
+    matrix = np.zeros((len(atoms), len(atoms)))
+    for aa, bb in edges_list:
+        matrix[aa, bb] += 1
+        matrix[bb, aa] += 1
+    return matrix
+
+# -------------------------------------------------------------------------------------
 # UPDATE CLEAN SLAB POSITIONS
 # -------------------------------------------------------------------------------------
 
 def update_clean_slab_positions(atoms, db_ase):
     """Update positions of relaxed clean slab."""
+    # TODO: use indices_ads instead.
     if "name_ref" in atoms.info and "n_atoms_clean" in atoms.info:
         if db_ase.count(name = atoms.info["name_ref"]) == 1:
             atoms_row = db_ase.get(name = atoms.info["name_ref"])
@@ -92,9 +110,11 @@ def update_clean_slab_positions(atoms, db_ase):
 # CHECK SAME CONNECTIVITY
 # -------------------------------------------------------------------------------------
 
-def check_same_connectivity(atoms_1, atoms_2):
+def check_same_connectivity(atoms_1, atoms_2, indices=None):
     """Check if two structures have the same connectivity."""
-    from arkimede.catkit.utils.connectivity import get_connectivity
+    #from arkimede.catkit.utils.connectivity import get_connectivity
+    if indices is None:
+        indices = atoms_1.info["indices_ads"]
     connectivity_1 = get_connectivity(atoms_1)
     connectivity_2 = get_connectivity(atoms_2)
     return (connectivity_1 == connectivity_2).all()
@@ -114,58 +134,6 @@ def get_atoms_min_energy(atoms_list):
 def get_atoms_max_energy(atoms_list):
     ii = np.argmax([atoms.get_potential_energy() for atoms in atoms_list])
     return atoms_list[ii]
-
-# -------------------------------------------------------------------------------------
-# FILTER RESULTS
-# -------------------------------------------------------------------------------------
-
-def filter_results(results, properties=all_properties):
-    return {pp: results[pp] for pp in results if pp in properties}
-
-# -------------------------------------------------------------------------------------
-# UPDATE ATOMS FROM ATOMS OPT
-# -------------------------------------------------------------------------------------
-
-def update_atoms_from_atoms_opt(
-    atoms,
-    atoms_opt,
-    converged,
-    modified,
-    properties=["energy", "forces"],
-    update_cell=False,
-):
-    """Update the input atoms with the results of the optimized atoms."""
-    atoms.set_positions(atoms_opt.get_positions())
-    if update_cell is True:
-        atoms.set_cell(atoms_opt.get_cell())
-    results = filter_results(results=atoms_opt.calc.results, properties=properties)
-    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
-    atoms.info["converged"] = bool(converged)
-    atoms.info["modified"] = bool(modified)
-    if "counter" in dir(atoms_opt.calc):
-        atoms.info["counter"] = atoms_opt.calc.counter
-
-    return atoms
-
-# -------------------------------------------------------------------------------------
-# GET ATOMS TOO CLOSE
-# -------------------------------------------------------------------------------------
-
-def get_atoms_too_close(atoms, mindist=0.2, return_anomaly=False):
-    """Get indices of atoms too close to each other."""
-    indices = []
-    for ii, position in enumerate(atoms.positions):
-        distances = np.linalg.norm(atoms.positions[ii+1:]-position, axis=1)
-        duplicates = np.where(distances < mindist)[0]
-        if len(duplicates) > 0:
-            indices += [jj+ii+1 for jj in duplicates if jj+ii+1 not in indices]
-            if return_anomaly is True:
-                break
-    
-    if return_anomaly is True:
-        return len(indices) > 0
-    else:
-        return indices
 
 # -------------------------------------------------------------------------------------
 # END

@@ -31,6 +31,10 @@ def main():
     db_dft_name = "databases/vasp_gas.db"
     db_dft_append = True
     
+    # Keywords used to match structures in the db and to be stored in db columns.
+    keys_match = ["name", "calculation"]
+    keys_store = ["name", "calculation", "status", "name_ref", "species"]
+    
     # Name of the folder for asevasp gas calculations.
     basedir_dft_calc = "calculations/vasp_gas"
     
@@ -112,6 +116,8 @@ def main():
         job_queued_fun=job_queued_k8s,
         command=command,
         write_all_to_db=True,
+        keys_match=keys_match,
+        keys_store=keys_store,
     )
 
 # -------------------------------------------------------------------------------------

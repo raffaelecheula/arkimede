@@ -4,7 +4,7 @@
 
 import numpy as np
 from ase import Atoms
-from ase.calculators.singlepoint import SinglePointCalculator
+from ase.calculators.singlepoint import SinglePointCalculator, all_properties
 
 # -------------------------------------------------------------------------------------
 # WRITE ATOMS TO DB
@@ -29,7 +29,7 @@ def write_atoms_to_db(
     filter_constraints(atoms)
     if db_ase.count(**kwargs_match) == 0:
         db_ase.write(
-            atoms=Atoms(atoms),
+            atoms=atoms,
             data=atoms.info,
             **kwargs_store,
         )
@@ -37,7 +37,7 @@ def write_atoms_to_db(
         row_id = db_ase.get(**kwargs_match).id
         db_ase.update(
             id=row_id,
-            atoms=Atoms(atoms),
+            atoms=atoms,
             data=atoms.info,
             **kwargs_store,
         )
@@ -57,11 +57,8 @@ def read_atoms_from_db(atoms, db_ase, keys_match=["name", "calculation"]):
         info.update(atoms_row.key_value_pairs)
         atoms.info.update(info)
         atoms.set_positions(atoms_row.positions)
-        atoms.calc = SinglePointCalculator(
-            atoms=atoms,
-            energy=atoms_row.energy,
-            forces=atoms_row.forces,
-        )
+        results = filter_results(results=atoms_row)
+        atoms.calc = SinglePointCalculator(atoms=atoms, **results)
         return atoms
     else:
         return None
@@ -151,6 +148,38 @@ def get_atoms_list_from_db_metadata(db_ase, selection, metadata_key):
     return atoms_list
 
 # -------------------------------------------------------------------------------------
+# FILTER RESULTS
+# -------------------------------------------------------------------------------------
+
+def filter_results(results, properties=all_properties):
+    return {pp: results[pp] for pp in results if pp in properties}
+
+# -------------------------------------------------------------------------------------
+# UPDATE ATOMS FROM ATOMS OPT
+# -------------------------------------------------------------------------------------
+
+def update_atoms_from_atoms_opt(
+    atoms,
+    atoms_opt,
+    converged,
+    modified,
+    properties=all_properties,
+    update_cell=False,
+):
+    """Update the input atoms with the results of the optimized atoms."""
+    atoms.set_positions(atoms_opt.get_positions())
+    if update_cell is True:
+        atoms.set_cell(atoms_opt.get_cell())
+    results = filter_results(results=atoms_opt.calc.results, properties=properties)
+    atoms.calc = SinglePointCalculator(atoms=atoms, **results)
+    atoms.info["converged"] = bool(converged)
+    atoms.info["modified"] = bool(modified)
+    if "counter" in dir(atoms_opt.calc):
+        atoms.info["counter"] = atoms_opt.calc.counter
+
+    return atoms
+
+# -------------------------------------------------------------------------------------
 # GET STATUS CALCULATION
 # -------------------------------------------------------------------------------------
 
@@ -208,7 +237,7 @@ def update_info_TS_combo(atoms_TS, atoms_IS, atoms_FS):
 def update_info_TS_from_IS(atoms_TS, atoms_IS, atoms_FS):
     """Update info of atoms_TS from info of atoms_IS."""
     atoms_TS.info = atoms_IS.info.copy()
-    atoms_TS.info["name"].replace("IS", "TS")
+    atoms_TS.info["name"] = atoms_TS.info["name"].replace("_IS", "_TS")
     atoms_TS.info["bonds_TS"] = atoms_IS.info["bonds_TS"]
 
 # -------------------------------------------------------------------------------------
@@ -218,7 +247,7 @@ def update_info_TS_from_IS(atoms_TS, atoms_IS, atoms_FS):
 def update_info_TS_from_FS(atoms_TS, atoms_IS, atoms_FS):
     """Update info of atoms_TS from info of atoms_FS."""
     atoms_TS.info = atoms_FS.info.copy()
-    atoms_TS.info["name"].replace("FS", "TS")
+    atoms_TS.info["name"] = atoms_TS.info["name"].replace("_FS", "_TS")
     atoms_TS.info["bonds_TS"] = atoms_FS.info["bonds_TS"]
 
 # -------------------------------------------------------------------------------------
@@ -231,7 +260,8 @@ def success_curve(atoms_list, max_steps=1000, filename="success_curve.png"):
     for atoms in atoms_list:
         if atoms.info["status"] == "finished":
             success_steps[atoms.info["counter"]:] += 1
-    success_steps *= 100/len(atoms_list)
+    if len(atoms_list) > 0:
+        success_steps *= 100/len(atoms_list)
     # Plot success curve.
     if filename is not None:
         import matplotlib.pyplot as plt
@@ -239,7 +269,7 @@ def success_curve(atoms_list, max_steps=1000, filename="success_curve.png"):
         ax.plot(np.arange(max_steps), success_steps)
         ax.set_xlim(0, max_steps)
         ax.set_ylim(0, 100)
-        ax.set_xlabel("steps [-]")
+        ax.set_xlabel("force calls [-]")
         ax.set_ylabel("success [%]")
         plt.savefig(filename)
     return success_steps

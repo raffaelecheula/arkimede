@@ -9,7 +9,7 @@ import subprocess
 import numpy as np
 from ase.io import read
 from ase.io import Trajectory
-from ase.calculators.singlepoint import SinglePointCalculator
+from ase.calculators.singlepoint import all_properties
 from arkimede.utilities import update_atoms_from_atoms_opt
 
 # -------------------------------------------------------------------------------------
@@ -135,7 +135,7 @@ def read_output_vasp(
     save_trajs=False,
     write_images=False,
     update_cell=False,
-    properties=["energy", "forces"],
+    properties=all_properties,
     **kwargs,
 ):
     """Read output of a vasp calculation."""
@@ -210,7 +210,8 @@ def read_output_asevasp(
     atoms,
     directory=".",
     update_cell=False,
-    properties=["energy", "forces"],
+    properties=all_properties,
+    **kwargs,
 ):
     """Read output of an asevasp calculation."""
     
