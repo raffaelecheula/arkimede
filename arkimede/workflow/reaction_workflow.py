@@ -209,7 +209,7 @@ def run_ase_calculations_mechanism(
                 for ss, atoms in {"IS": atoms_IS_1, "FS": atoms_FS_1}.items():
                     run_relax_calculation(
                         atoms=atoms,
-                        label=f"relax_{ss}_1",
+                        label=f"relax_{ss}_neb",
                         directory=directory,
                         **kwargs_all_check,
                     )
@@ -244,7 +244,7 @@ def run_ase_calculations_mechanism(
                     for ss, atoms in {"IS": atoms_IS_2, "FS": atoms_FS_2}.items():
                         run_relax_calculation(
                             atoms=atoms,
-                            label=f'relax_{ss}_2',
+                            label=f'relax_{ss}_{search_TS}',
                             directory=directory,
                             **kwargs_all_check,
                         )

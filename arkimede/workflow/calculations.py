@@ -9,6 +9,7 @@ from ase.optimize import BFGS, LBFGS, ODE12r
 from ase.neb import NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
 from arkimede.utilities import (
+    get_indices_fixed,
     get_indices_not_fixed,
     get_indices_adsorbate,
     filter_results,
@@ -598,7 +599,6 @@ def run_climbfixint_calculation(
 def run_sella_calculation(
     atoms,
     calc,
-    bonds_TS,
     label='sella',
     directory='.',
     save_trajs=False,
@@ -610,6 +610,7 @@ def run_sella_calculation(
     min_steps=None,
     max_forcecalls=None,
     properties=["energy", "forces"],
+    kwargs_opt={},
     **kwargs,
 ):
     """Run a sella calculation."""
@@ -626,18 +627,19 @@ def run_sella_calculation(
 
     atoms_opt = atoms.copy()
     atoms_opt.calc = calc
-    indices = get_indices_not_fixed(atoms_opt, return_mask=False)
+    indices = get_indices_fixed(atoms_opt, return_mask=False)
     
     atoms_opt.constraints = []
     constraints = Constraints(atoms_opt)
-    constraints.fix_translation(indices)
+    for ii in indices:
+        constraints.fix_translation(ii)
     
     opt = Sella(
         atoms=atoms_opt,
         constraints=constraints,
         trajectory=trajname,
         logfile=logfile,
-        internal=True,
+        **kwargs_opt,
     )
     
     # Observer to set a minimum number of steps.
@@ -657,6 +659,94 @@ def run_sella_calculation(
     # Run the calculation.
     try:
         opt.run(fmax=fmax, steps=max_steps)
+        converged = opt.converged()
+    except Exception as error:
+        print(error)
+        converged = False
+    
+    # Update the input atoms with the results of the calculation.
+    atoms = update_atoms_from_atoms_opt(
+        atoms=atoms,
+        atoms_opt=atoms_opt,
+        converged=converged,
+        modified=False,
+        properties=properties,
+        update_cell=update_cell,
+    )
+
+    # Write image.
+    if write_images is True:
+        filename = os.path.join(directory, f"{label}.png")
+        atoms.write(filename, radii=0.9, scale=200)
+
+# -------------------------------------------------------------------------------------
+# RUN SELLA CALCULATION
+# -------------------------------------------------------------------------------------
+
+def run_irc_calculation(
+    atoms,
+    calc,
+    label='irc',
+    direction="forward",
+    directory='.',
+    save_trajs=False,
+    write_images=False,
+    update_cell=False,
+    logfile='-',
+    fmax=0.05,
+    max_steps=500,
+    min_steps=None,
+    max_forcecalls=None,
+    properties=["energy", "forces"],
+    kwargs_opt={},
+    **kwargs,
+):
+    """Run a sella calculation."""
+    from sella import IRC, Constraints
+
+    # Create directory to store the results.
+    if save_trajs is True or write_images is True:
+        os.makedirs(directory, exist_ok=True)
+
+    # Name of the trajectory file.
+    trajname = None
+    if save_trajs is True:
+        trajname = os.path.join(directory, f'{label}.traj')
+
+    atoms_opt = atoms.copy()
+    atoms_opt.calc = calc
+    indices = get_indices_fixed(atoms_opt, return_mask=False)
+    
+    atoms_opt.constraints = []
+    constraints = Constraints(atoms_opt)
+    for ii in indices:
+        constraints.fix_translation(ii)
+    
+    opt = IRC(
+        atoms=atoms_opt,
+        constraints=constraints,
+        trajectory=trajname,
+        logfile=logfile,
+        **kwargs_opt,
+    )
+    
+    # Observer to set a minimum number of steps.
+    if min_steps:
+        kwargs_obs = {"opt": opt}
+        opt.attach(min_steps_obs, interval=1, **kwargs_obs)
+    
+    # Observer to set a maximum of forces calls.
+    if max_forcecalls:
+        kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
+        opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
+    
+    # Calculate the number of calculator calls.
+    if "counter" in dir(calc):
+        calc.counter = 0
+    
+    # Run the calculation.
+    try:
+        opt.run(fmax=fmax, steps=max_steps, direction=direction)
         converged = opt.converged()
     except Exception as error:
         print(error)
@@ -800,6 +890,13 @@ def run_calculation(
     elif calculation == "sella":
         # Sella calculaton.
         run_sella_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "irc":
+        # IRC calculaton.
+        run_irc_calculation(
             atoms=atoms,
             calc=calc,
             **kwargs,

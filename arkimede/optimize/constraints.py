@@ -137,8 +137,8 @@ def set_doublehookeans(
     bonds_TS,
     indices_ads,
     thr_min=0.85,
-    thr_max=2.00,
-    k_spring=100.,
+    thr_max=1.50,
+    k_spring=50.,
 ):
     
     cutoffs = natural_cutoffs(atoms=atoms, mult=1.)

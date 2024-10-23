@@ -112,12 +112,20 @@ def update_clean_slab_positions(atoms, db_ase):
 
 def check_same_connectivity(atoms_1, atoms_2, indices=None):
     """Check if two structures have the same connectivity."""
-    #from arkimede.catkit.utils.connectivity import get_connectivity
     if indices is None:
         indices = atoms_1.info["indices_ads"]
-    connectivity_1 = get_connectivity(atoms_1)
-    connectivity_2 = get_connectivity(atoms_2)
+    connectivity_1 = get_connectivity(atoms_1, indices=indices)
+    connectivity_2 = get_connectivity(atoms_2, indices=indices)
     return (connectivity_1 == connectivity_2).all()
+
+# -------------------------------------------------------------------------------------
+# GET MAX FORCE
+# -------------------------------------------------------------------------------------
+
+def get_max_force(atoms):
+    if isinstance(atoms, list):
+        return np.max([get_max_force(aa) for aa in atoms])
+    return np.sqrt((atoms.get_forces() ** 2).sum(axis=1).max())
 
 # -------------------------------------------------------------------------------------
 # GET ATOMS MIN ENERGY

@@ -9,6 +9,7 @@ from .atoms import (
     get_edges_list,
     update_clean_slab_positions,
     check_same_connectivity,
+    get_max_force,
     get_atoms_min_energy,
     get_atoms_max_energy,
 )

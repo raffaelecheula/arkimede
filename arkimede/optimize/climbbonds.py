@@ -6,6 +6,7 @@ import numpy as np
 from scipy.integrate import LSODA
 from ase.geometry import find_mic
 from ase.constraints import FixConstraint
+from ase.neighborlist import natural_cutoffs
 
 # -------------------------------------------------------------------------------------
 # CLIMB BONDS
@@ -29,12 +30,57 @@ class ClimbBonds(FixConstraint):
         self.t_bound = t_bound
         self.scale_forces = scale_forces
         self.bondlengths = np.zeros(self.bonds.shape[0])
+        self.bondlengths_nat = None
         
+        #self.thr_min = 0.80
+        #self.thr_min_ok = 0.90
+        #self.thr_max = 1.50
+        #self.thr_max_ok = 1.25
+        #self.k_spring = 5.
+    
+    #def initialize_atoms(self, atoms):
+    #    cutoffs = natural_cutoffs(atoms=atoms, mult=1.)
+    #    self.bondlengths_nat = []
+    #    self.too_short = []
+    #    self.too_long = []
+    #    
+    #    for a1, a2 in self.bonds:
+    #        self.bondlengths_nat.append(cutoffs[a1]+cutoffs[a2])
+    #        self.too_short.append(False)
+    #        self.too_long.append(False)
+    
+    #def double_hookean(self, atoms, forces):
+    #    if self.bondlengths_nat is None:
+    #        self.initialize_atoms(atoms=atoms)
+    #    for ii, bond in enumerate(self.bonds):
+    #        p1, p2 = atoms.positions[bond]
+    #        displ, bondlength = find_mic(p1-p2, cell=atoms.cell, pbc=True)
+    #        if bondlength/self.bondlengths_nat[ii] < self.thr_min:
+    #            self.too_short[ii] = True
+    #            print("too short")
+    #        elif bondlength/self.bondlengths_nat[ii] > self.thr_max:
+    #            self.too_long[ii] = True
+    #            print("too long")
+    #        if bondlength/self.bondlengths_nat[ii] > self.thr_min_ok:
+    #            self.too_short[ii] = False
+    #        if bondlength/self.bondlengths_nat[ii] < self.thr_max_ok:
+    #            self.too_long[ii] = False
+    #        # Add restoring force.
+    #        if self.too_short[ii] is True or self.too_long[ii] is True:
+    #            magnitude = self.k_spring * (bondlength - self.bondlengths_nat[ii])
+    #            direction = displ / bondlength
+    #            forces[bond[0]] += -direction * magnitude
+    #            forces[bond[1]] += +direction * magnitude
+    #        self.bondlengths[ii] = bondlength
+    
     def adjust_momenta(self, atoms, forces):
         
         masses = atoms.get_masses()
         for ii, bond in enumerate(self.bonds):
             self.bondlengths[ii] = atoms.get_distance(*bond, mic=True)
+        #self.double_hookean(atoms=atoms, forces=forces)
+        #if any(self.too_long+self.too_short):
+        #    return
 
         def get_dforces(time, forces):
             x_dot_tot = 0.
