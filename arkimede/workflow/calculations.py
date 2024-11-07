@@ -6,7 +6,8 @@ import os
 import numpy as np
 from ase.io import Trajectory
 from ase.optimize import BFGS, LBFGS, ODE12r
-from ase.neb import NEBOptimizer
+try: from ase.neb import NEB, NEBOptimizer
+except: from ase.mep.neb import NEB, NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
 from arkimede.utilities import (
     get_indices_fixed,
@@ -71,7 +72,7 @@ def run_relax_calculation(
     
     # Observer to set a minimum number of steps.
     if min_steps:
-        kwargs_obs = {"opt": opt}
+        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
     
     # Observer to set a maximum of forces calls.
@@ -116,14 +117,14 @@ def run_neb_calculation(
     fmax=0.05,
     max_steps=300,
     min_steps=None,
-    k_neb=0.10,
+    k_neb=1.00,
     label='neb',
     directory='.',
     save_trajs=False,
     write_images=False,
     logfile='-',
     use_OCPdyNEB=False,
-    optimizer=NEBOptimizer,
+    optimizer=BFGS,
     kwargs_opt={},
     activate_climb=True,
     print_energies=False,
@@ -152,7 +153,6 @@ def run_neb_calculation(
             climb=False,
         )
     else:
-        from ase.neb import NEB
         neb = NEB(
             images=images,
             k=k_neb,
@@ -183,7 +183,7 @@ def run_neb_calculation(
     
     # Observer to set a minimum number of steps.
     if min_steps:
-        kwargs_obs = {"opt": opt}
+        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
 
     # Observer to set a maximum of forces calls.
@@ -327,7 +327,7 @@ def run_dimer_calculation(
     
     # Observer to set a minimum number of steps.
     if min_steps:
-        kwargs_obs = {"opt": opt}
+        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
     
     # Observer to set a maximum of forces calls.
@@ -387,6 +387,7 @@ def run_climbbonds_calculation(
     atoms_too_close=False,
     max_forcecalls=None,
     optimizer=ODE12r,
+    atoms_IS_FS=None,
     kwargs_opt={},
     properties=["energy", "forces"],
     propagate_forces=True,
@@ -414,7 +415,7 @@ def run_climbbonds_calculation(
     # Create a copy of the atoms object to not mess with constraints.
     atoms_opt = atoms.copy()
     atoms_opt.calc = calc
-    atoms_opt.constraints.append(ClimbBonds(bonds=bonds_TS))
+    atoms_opt.constraints.append(ClimbBonds(bonds=bonds_TS, atoms_IS_FS=atoms_IS_FS))
     
     # Add forces propagation to improve convergence.
     if propagate_forces is True:
@@ -450,7 +451,7 @@ def run_climbbonds_calculation(
     
     # Observer to set a minimum number of steps.
     if min_steps:
-        kwargs_obs = {"opt": opt}
+        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
     
     # Observer to set a maximum of forces calls.
@@ -463,12 +464,15 @@ def run_climbbonds_calculation(
         calc.counter = 0
     
     # Run the calculation.
-    try:
-        opt.run(fmax=fmax, steps=max_steps)
-        converged = opt.converged()
-    except Exception as error:
-        print(error)
-        converged = False
+    failed = 0
+    converged = False
+    while opt.nsteps < max_steps and failed < 100 and not converged:
+        try:
+            opt.run(fmax=fmax, steps=max_steps-opt.nsteps)
+            converged = opt.converged()
+        except Exception as error:
+            print(error)
+            failed += 1
     
     # Update the input atoms with the results of the calculation.
     atoms = update_atoms_from_atoms_opt(
@@ -508,6 +512,7 @@ def run_climbfixint_calculation(
     max_force_tot=50.,
     max_forcecalls=None,
     properties=["energy", "forces"],
+    kwargs_opt={},
     **kwargs,
 ):
     """Run a climbfixinternals calculation."""
@@ -539,6 +544,7 @@ def run_climbfixint_calculation(
         trajectory=trajname,
         index_constr2climb=index_constr2climb,
         optB_kwargs=optB_kwargs,
+        **kwargs_opt,
     )
     
     # Observer that checks the displacement of the ts from the starting position.
@@ -557,7 +563,7 @@ def run_climbfixint_calculation(
     
     # Observer to set a minimum number of steps.
     if min_steps:
-        kwargs_obs = {"opt": opt}
+        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
     
     # Observer to set a maximum of forces calls.
@@ -644,7 +650,7 @@ def run_sella_calculation(
     
     # Observer to set a minimum number of steps.
     if min_steps:
-        kwargs_obs = {"opt": opt}
+        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
     
     # Observer to set a maximum of forces calls.
@@ -732,7 +738,7 @@ def run_irc_calculation(
     
     # Observer to set a minimum number of steps.
     if min_steps:
-        kwargs_obs = {"opt": opt}
+        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
     
     # Observer to set a maximum of forces calls.
@@ -803,14 +809,12 @@ def run_vibrations_calculation(
     
     class VibrationsWithEnergy(Vibrations):
         def calculate(self, atoms, disp):
-            self.calc.calculate(
-                atoms=atoms,
-                properties=properties,
-                system_changes=["positions"],
-            )
+            results = {}
+            results['energy'] = float(self.calc.get_potential_energy(atoms))
+            results['forces'] = self.calc.get_forces(atoms)
             if self.ir:
-                self.calc.get_dipole_moment(atoms)
-            return self.calc.results
+                results['dipole'] = self.calc.get_dipole_moment(atoms)
+            return results
     
     vib = VibrationsWithEnergy(
         atoms=atoms_vib,

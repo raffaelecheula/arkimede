@@ -70,7 +70,7 @@ def main():
     # Ase vasp command.
     asevasp_py = scripts_basedir() / "asevasp.py"
     conda_command = "source /home/jovyan/.bashrc; conda activate ocp"
-    command = f"{conda_command}; python {asevasp_py} >> asevasp.out"
+    command = f"{conda_command}; python {asevasp_py} >> {filename_out}"
     
     # ---------------------------------------------------------------------------------
     # RUN DFT CALCULATIONS

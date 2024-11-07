@@ -33,12 +33,32 @@ def main():
     keys_store = ["name", "calculation", "status", "name_ref", "species"]
 
     # Calculations parameters.
-    fmax = 0.05
-    max_steps_relax = 500
-    max_steps_neb = 10
-    max_steps_ts_search = 1000
     n_images_neb = 10
     search_TS = "climbbonds" # dimer | climbbonds | climbfixint | sella
+    check_modified_neb = False
+    check_modified_TS_search = True
+
+    # Kwargs parameters of calculations.
+    kwargs_relax = {
+        "fmax": 0.05,
+        "max_steps": 1000,
+    }
+    kwargs_neb = {
+        "fmax": 0.05,
+        "max_steps": 100,
+        "k_neb": 1.0,
+        "use_OCPdyNEB": True,
+    }
+    kwargs_ts_search = {
+        "fmax": 0.05,
+        "max_steps": 1000,
+        "min_steps": 10,
+        "max_forcecalls": 1000,
+    }
+    kwargs_check = {
+        "fmax": 0.05,
+        "max_steps": 1000,
+    }
 
     # Save trajectories and write images.
     save_trajs = False
@@ -80,23 +100,26 @@ def main():
     # Initialize ase dft database.
     db_ase = connect(name=db_ase_name, append=db_ase_append)
 
+    # Run the calculations.
     run_ase_calculations_mechanism(
         atoms_clean_tot=atoms_clean_tot,
         atoms_ads_tot=atoms_ads_tot,
         atoms_neb_tot=atoms_neb_tot,
         calc=calc,
         db_ase=db_ase,
-        fmax=fmax,
-        max_steps_relax=max_steps_relax,
-        max_steps_neb=max_steps_neb,
-        max_steps_ts_search=max_steps_ts_search,
         n_images_neb=n_images_neb,
         search_TS=search_TS,
         save_trajs=save_trajs,
         write_images=write_images,
         basedir_trajs=basedir_trajs,
+        check_modified_neb=check_modified_neb,
+        check_modified_TS_search=check_modified_TS_search,
         keys_match=keys_match,
         keys_store=keys_store,
+        kwargs_relax=kwargs_relax,
+        kwargs_neb=kwargs_neb,
+        kwargs_ts_search=kwargs_ts_search,
+        kwargs_check=kwargs_check,
     )
 
 # -------------------------------------------------------------------------------------

@@ -15,7 +15,7 @@ def write_atoms_to_db(
     db_ase,
     get_status=True,
     keys_match=["name", "calculation"],
-    keys_store=["name", "name_ref", "species", "calculation", "status"],
+    keys_store=["name", "calculation", "status"],
 ):
     """Write atoms to ase database."""
     if get_status is True:
@@ -76,6 +76,13 @@ def get_atoms_list_from_db(db_ase, selection="", **kwargs):
         atoms.info = atoms_row.data
         atoms_list.append(atoms)
     return atoms_list
+
+# -------------------------------------------------------------------------------------
+# FILTER RESULTS
+# -------------------------------------------------------------------------------------
+
+def filter_results(results, properties=all_properties):
+    return {pp: results[pp] for pp in results if pp in properties}
 
 # -------------------------------------------------------------------------------------
 # FILTER CONSTRAINTS
@@ -148,13 +155,6 @@ def get_atoms_list_from_db_metadata(db_ase, selection, metadata_key):
     return atoms_list
 
 # -------------------------------------------------------------------------------------
-# FILTER RESULTS
-# -------------------------------------------------------------------------------------
-
-def filter_results(results, properties=all_properties):
-    return {pp: results[pp] for pp in results if pp in properties}
-
-# -------------------------------------------------------------------------------------
 # UPDATE ATOMS FROM ATOMS OPT
 # -------------------------------------------------------------------------------------
 
@@ -172,6 +172,7 @@ def update_atoms_from_atoms_opt(
         atoms.set_cell(atoms_opt.get_cell())
     results = filter_results(results=atoms_opt.calc.results, properties=properties)
     atoms.calc = SinglePointCalculator(atoms=atoms, **results)
+    atoms.info.update(atoms_opt.info)
     atoms.info["converged"] = bool(converged)
     atoms.info["modified"] = bool(modified)
     if "counter" in dir(atoms_opt.calc):
@@ -254,7 +255,7 @@ def update_info_TS_from_FS(atoms_TS, atoms_IS, atoms_FS):
 # SUCCESS CURVE
 # -------------------------------------------------------------------------------------
 
-def success_curve(atoms_list, max_steps=1000, filename="success_curve.png"):
+def success_curve(atoms_list, max_steps=1000, filename=None):
     """Calculate success curve."""
     success_steps = np.zeros(max_steps)
     for atoms in atoms_list:
@@ -269,7 +270,7 @@ def success_curve(atoms_list, max_steps=1000, filename="success_curve.png"):
         ax.plot(np.arange(max_steps), success_steps)
         ax.set_xlim(0, max_steps)
         ax.set_ylim(0, 100)
-        ax.set_xlabel("force calls [-]")
+        ax.set_xlabel("single-point calculations [-]")
         ax.set_ylabel("success [%]")
         plt.savefig(filename)
     return success_steps

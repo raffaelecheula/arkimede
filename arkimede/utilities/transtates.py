@@ -4,6 +4,8 @@
 
 import numpy as np
 from ase.optimize import LBFGS
+try: from ase.neb import NEB, idpp_interpolate
+except: from ase.mep.neb import NEB, idpp_interpolate
 
 # -------------------------------------------------------------------------------------
 # GET IDPP INTERPOLATED IMAGES
@@ -24,7 +26,6 @@ def get_idpp_interpolated_images(
     from_atoms_info=False,
 ):
     """Get idpp interpolated images with strict optimization parameters."""
-    from ase.neb import NEB, idpp_interpolate
     from ase.io import Trajectory
     images = [atoms_IS.copy()]
     images += [atoms_IS.copy() for i in range(n_images-2)]
