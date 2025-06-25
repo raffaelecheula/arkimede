@@ -8,6 +8,8 @@ setup(
     author_email="cheula.raffaele@gmail.com",
     description="Automatic reactions kinetic mechanism design.",
     license="GPL-3.0",
-    install_requires=find_packages(),
+    packages=["arkimede"],
+    package_dir={"arkimede": "arkimede"},
+    install_requires=[],
     python_requires=">=3.5, <4",
 )

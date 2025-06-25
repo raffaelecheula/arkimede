@@ -71,14 +71,14 @@ def main():
 
     # Adsorbates names.
     adsorbate_list = [
-        "CO2**",
-        "H2O*",
-        "CO*",
-        "H*",
-        "OH*",
-        "O*",
-        "c-COOH**",
-        "t-COOH**",
+        #"CO2**",
+        #"H2O*",
+        #"CO*",
+        #"H*",
+        #"OH*",
+        #"O*",
+        #"c-COOH**",
+        #"t-COOH**",
         #"H2*",
         #"b-HCOOH**"
         

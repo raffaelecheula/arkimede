@@ -6,7 +6,8 @@ import os
 import numpy as np
 from ase.io import Trajectory
 from ase.optimize import BFGS, LBFGS, ODE12r
-from ase.neb import NEBOptimizer
+try: from ase.neb import NEB, NEBOptimizer
+except: from ase.mep.neb import NEB, NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
 from arkimede.utilities import (
     get_indices_fixed,
@@ -122,7 +123,6 @@ def run_neb_calculation(
     save_trajs=False,
     write_images=False,
     logfile='-',
-    use_OCPdyNEB=False,
     optimizer=NEBOptimizer,
     kwargs_opt={},
     activate_climb=True,
@@ -142,25 +142,15 @@ def run_neb_calculation(
     if save_trajs is True:
         trajname = os.path.join(directory, f'{label}.traj')
     
-    # Choose NEB method.
-    if use_OCPdyNEB:
-        from ocpneb.core import OCPdyNEB
-        neb = OCPdyNEB(
-            images=images,
-            checkpoint_path=calc.config['checkpoint'],
-            k=k_neb,
-            climb=False,
-        )
-    else:
-        from ase.neb import NEB
-        neb = NEB(
-            images=images,
-            k=k_neb,
-            climb=False,
-            parallel=False,
-            method='aseneb',
-            allow_shared_calculator=True,
-        )
+    # Set up NEB method.
+    neb = NEB(
+        images=images,
+        k=k_neb,
+        climb=False,
+        parallel=False,
+        method='aseneb',
+        allow_shared_calculator=True,
+    )
     for atoms in images:
         atoms.calc = calc
     for ii in (0, -1):
@@ -803,14 +793,12 @@ def run_vibrations_calculation(
     
     class VibrationsWithEnergy(Vibrations):
         def calculate(self, atoms, disp):
-            self.calc.calculate(
-                atoms=atoms,
-                properties=properties,
-                system_changes=["positions"],
-            )
+            results = {}
+            results['energy'] = float(self.calc.get_potential_energy(atoms))
+            results['forces'] = self.calc.get_forces(atoms)
             if self.ir:
-                self.calc.get_dipole_moment(atoms)
-            return self.calc.results
+                results['dipole'] = self.calc.get_dipole_moment(atoms)
+            return results
     
     vib = VibrationsWithEnergy(
         atoms=atoms_vib,
@@ -831,7 +819,7 @@ def run_vibrations_calculation(
         atoms_vib = atoms_vib.copy()
         results = filter_results(results=vib.cache[disp.name], properties=properties)
         atoms_vib.calc = SinglePointCalculator(atoms=atoms_vib, **results)
-        atoms_vib.info["displacement"] = disp.name
+        atoms_vib.info["displacement"] = str(disp.name)
         atoms_list.append(atoms_vib)
     
     # Write Trajectory files for each displacement.

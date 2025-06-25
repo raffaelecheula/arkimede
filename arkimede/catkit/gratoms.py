@@ -4,7 +4,8 @@ import ase
 import copy
 import warnings
 from builtins import super
-from networkx.convert_matrix import from_numpy_matrix
+try: from networkx.convert_matrix import from_numpy_matrix
+except: from networkx.convert_matrix import from_numpy_array as from_numpy_matrix
 
 sym = np.array(ase.data.chemical_symbols)
 em = nx.algorithms.isomorphism.numerical_edge_match("bonds", 1)
@@ -347,7 +348,8 @@ class Gratoms(ase.Atoms):
             if x != 1 and not vec.any():
                 raise ValueError("Cannot repeat along undefined lattice vector")
 
-        M = np.product(m)
+        #M = np.product(m)
+        M = np.prod(m)
         n = len(self)
 
         for name, a in self.arrays.items():

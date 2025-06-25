@@ -7,6 +7,7 @@ from arkimede.workflow.reaction_workflow import run_ase_calculations_mechanism
 from arkimede.utilities import get_atoms_list_from_db_metadata, read_step_actlearn
 from arkimede.ocp.ocp_utils import get_checkpoint_path, get_checkpoint_path_actlearn
 from arkimede.ocp.ocp_calc import OCPCalculatorCounter
+#from chgnet.model.dynamics import CHGNetCalculator
 
 # -------------------------------------------------------------------------------------
 # MAIN
@@ -52,6 +53,7 @@ def main():
     else:
         checkpoint_path = get_checkpoint_path_actlearn(step_actlearn=step_actlearn)
     calc = OCPCalculatorCounter(checkpoint_path=checkpoint_path, cpu=False)
+    #calc = CHGNetCalculator()
     
     # ---------------------------------------------------------------------------------
     # RUN ASE CALCULATIONS
@@ -82,7 +84,7 @@ def main():
 
     run_ase_calculations_mechanism(
         atoms_clean_tot=atoms_clean_tot,
-        atoms_ads_tot=atoms_ads_tot,
+        atoms_ads_tot=[],
         atoms_neb_tot=atoms_neb_tot,
         calc=calc,
         db_ase=db_ase,
