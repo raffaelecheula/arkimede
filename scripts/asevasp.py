@@ -13,7 +13,9 @@ from arkimede.workflow.calculations import run_calculation
 # -------------------------------------------------------------------------------------
 
 # Read atoms object.
-atoms = read("asevasp.traj")
+atoms = read("initial.traj")
+
+# Calculation settings.
 vasp_flags = atoms.info["vasp_flags"]
 kpts = atoms.info["kpts"]
 filename_out = atoms.info["filename_out"]

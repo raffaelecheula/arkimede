@@ -34,6 +34,7 @@ def submit_k8s(
     cpu_lim=12,
     mem_req='8Gi',
     mem_lim='24Gi',
+    gpu_req="0",
 ):
     """Submit a calculation in k8s."""
 
@@ -54,6 +55,8 @@ def submit_k8s(
     container['workingDir'] = os.path.abspath(dirpath)
     container['resources']['limits']['cpu'] = cpu_lim
     container['resources']['requests']['cpu'] = cpu_req
+    container['resources']['limits']['nvidia.com/gpu'] = gpu_req
+    container['resources']['requests']['nvidia.com/gpu'] = gpu_req
     container['args'][0] = re.sub('-np \d+', f'-np {cpu_req}', container['args'][0])
     container['resources']['limits']['memory'] = mem_lim
     container['resources']['requests']['memory'] = mem_req
@@ -200,7 +203,7 @@ def write_input_asevasp(atoms, auto_kpts=True):
     if auto_kpts is True:
         atoms.info["kpts"] = automatic_kpts(atoms)
     # Write trajectory file containing all the parameters.
-    atoms.write("asevasp.traj")
+    atoms.write("initial.traj")
 
 # -------------------------------------------------------------------------------------
 # READ OUTPUT ASEVASP
@@ -237,8 +240,8 @@ def read_output_asevasp(
         atoms_ii = update_atoms_from_atoms_opt(
             atoms=atoms.copy(),
             atoms_opt=atoms_opt_ii,
-            converged=atoms_ii.info["converged"],
-            modified=atoms_ii.info["modified"],
+            converged=atoms_opt_ii.info["converged"],
+            modified=atoms_opt_ii.info["modified"],
             properties=properties,
             update_cell=update_cell,
         )

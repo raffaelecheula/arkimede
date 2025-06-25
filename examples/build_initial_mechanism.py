@@ -206,7 +206,7 @@ def main():
     
     # Store initial structures into ade database.
     for atoms in atoms_gas_tot+atoms_clean_tot+atoms_ads_tot+atoms_allnebs_tot:
-        atoms.info["calculation"] = "initial-structure"
+        atoms.info["calculation"] = "initial"
         atoms.info["converged"] = False
         write_atoms_to_db(atoms=atoms, db_ase=db_init)
     

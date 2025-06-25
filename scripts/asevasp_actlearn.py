@@ -3,6 +3,8 @@
 # -------------------------------------------------------------------------------------
 
 import os
+import timeit
+import yaml
 from ase.io import read
 from ase.db import connect
 from ase.io import Trajectory
@@ -40,8 +42,8 @@ update_keys_default = {
     'gpus': 1,
     'task.dataset': 'ase_db',
     'optim.eval_every': 100,
-    'optim.max_epochs': 100, # 10
-    'optim.lr_initial': 1e-5, # 5e-6 # 1e-7 probably too low
+    'optim.max_epochs': 100,
+    'optim.lr_initial': 1e-5,
     'optim.batch_size': 1,
     'optim.num_workers': 4, # 0
     #'optim.energy_coefficient': 0,
@@ -60,16 +62,7 @@ update_keys_default = {
 # -------------------------------------------------------------------------------------
 
 # Read atoms object.
-atoms = read("aloptvasp.traj")
-
-# TODO: just for testing, these should be already in atoms!
-atoms.set_tags([1.]*len(atoms))
-atoms.info["name"] = "aloptvasp"
-atoms.info["min_steps"] = 10
-atoms.info["max_steps"] = 1000
-atoms.info["fmax"] = 0.05
-atoms.info["max_step_actlearn"] = 100
-atoms.info["vasp_flags"]["lwave"] = True
+atoms = read("initial.traj")
 
 # Calculation settings.
 vasp_flags = atoms.info["vasp_flags"]
@@ -77,10 +70,9 @@ kpts = atoms.info["kpts"]
 calculation = atoms.info["calculation"]
 max_step_actlearn = atoms.info["max_step_actlearn"]
 fmax = atoms.info["fmax"]
+checkpoint_path = atoms.info["checkpoint_path"]
 
 # OCPmodels ase calculator.
-checkpoint_key = 'GemNet-OC OC20+OC22 v2'
-checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
 calc = OCPCalculatorCounter(checkpoint_path=checkpoint_path, cpu=False)
 
 # Initialize ase database.
@@ -99,12 +91,21 @@ update_config_yaml(
 # Setup vasp calculator and run the calculation.
 with VaspInteractive(**vasp_flags, directory="vasp", kpts=kpts) as calc_dft:
     print(calculation+" calculation started")
+    time_ocp = 0.
+    time_vasp = 0.
+    time_finetune = 0.
     for ii in range(max_step_actlearn):
+        # ocp calculation.
+        time_ocp_start = timeit.default_timer()
         run_calculation(atoms=atoms, calc=calc, **atoms.info)
+        time_ocp += timeit.default_timer()-time_ocp_start
+        # vasp calculation.
+        time_vasp_start = timeit.default_timer()
         atoms.calc = calc_dft
         forces = atoms.get_forces()
         max_force = (forces ** 2).sum(axis=1).max() ** 0.5
         print(f"vasp fmax = {max_force:+7.4f}")
+        time_vasp += timeit.default_timer()-time_vasp_start
         if max_force < fmax:
             break
         write_atoms_to_db(
@@ -113,14 +114,27 @@ with VaspInteractive(**vasp_flags, directory="vasp", kpts=kpts) as calc_dft:
             keys_store=[],
             get_status=False,
         )
+        # ocp model fine-tuning.
+        time_finetune_start = timeit.default_timer()
         fine_tune_ocp_model(
             checkpoint_path=checkpoint_path,
             config_yaml="finetuning/config.yml",
-            identifier=f"step-{ii+1:03d}"
+            step_actlearn=ii+1,
         )
+        time_finetune += timeit.default_timer()-time_finetune_start
         checkpoint_path = get_checkpoint_path_actlearn(step_actlearn=ii+1)
         calc = OCPCalculatorCounter(checkpoint_path=checkpoint_path, cpu=False)
     print(calculation+" calculation finished")
+    # Update trajectory.
+    atoms.info.update({
+        "n_vasp_steps": ii+1,
+        "time_ocp": time_ocp, 
+        "time_vasp": time_vasp,
+        "time_finetune": time_finetune,
+    })
+    with Trajectory(filename=calculation+".traj", mode='a') as traj:
+        traj.write(atoms, **atoms.calc.results)
+    print("all calculations finished")
     
 # -------------------------------------------------------------------------------------
 # END

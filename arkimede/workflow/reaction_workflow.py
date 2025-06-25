@@ -37,7 +37,7 @@ def run_ase_calculations_mechanism(
     check_modified_neb=False,
     check_modified_TS_search=False,
     keys_match=["name", "calculation"],
-    keys_store=["name", "name_ref", "species", "calculation", "status"],
+    keys_store=["name", "calculation", "status"],
     kwargs_relax={},
     kwargs_neb={},
     kwargs_ts_search={},
@@ -231,6 +231,7 @@ def run_ase_calculations_mechanism(
                     atoms=atoms_TS,
                     calculation=search_TS,
                     bonds_TS=bonds_TS,
+                    atoms_IS_FS=[atoms_IS, atoms_FS],
                     directory=directory,
                     **kwargs_all_ts_search,
                 )
@@ -282,9 +283,10 @@ def run_dft_calculations_k8s(
     cpu_lim=12,
     mem_req='8Gi',
     mem_lim='24Gi',
+    gpu_req="0",
     write_all_to_db=False,
     keys_match=["name", "calculation"],
-    keys_store=["name", "name_ref", "species", "calculation", "status"],
+    keys_store=["name", "calculation", "status"],
     kwargs_read_db={},
     kwargs_write_db={},
     kwargs_read_out={},
@@ -340,6 +342,7 @@ def run_dft_calculations_k8s(
                     cpu_lim=cpu_lim,
                     mem_req=mem_req,
                     mem_lim=mem_lim,
+                    gpu_req=gpu_req,
                 )
             os.chdir(cwd)
         print_results_calculation(atoms=atoms)

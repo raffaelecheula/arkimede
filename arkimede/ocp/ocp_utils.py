@@ -187,7 +187,7 @@ def get_checkpoint_path_actlearn(step_actlearn, directory="finetuning"):
     """Get checkpoint path after fine tuning."""
     checkpoint_path = None
     basepath = os.path.join(directory, "checkpoints")
-    for dirname in sorted(os.listdir(basepath)):
+    for dirname in reversed(sorted(os.listdir(basepath))):
         if int(dirname.split("-")[-1]) == step_actlearn:
             checkpoint_path = os.path.join(basepath, dirname, "best_checkpoint.pt")
             break
@@ -337,16 +337,17 @@ def fine_tune_ocp_model(
     config_yaml="config.yml",
     directory="finetuning",
     step_actlearn=0,
-    identifier="step",
+    identifier_key="step",
 ):
 
     # Fine-tuning settings.
+    identifier = f"{identifier_key}-{step_actlearn:04d}"
     args_dict = {
         "mode": "train",
         "config-yml": config_yaml,
         "checkpoint": checkpoint_path,
         "run-dir": directory,
-        "identifier": f"{identifier}-{step_actlearn:04d}",
+        "identifier": identifier,
         "amp": "",
     }
     
@@ -354,7 +355,7 @@ def fine_tune_ocp_model(
     command = f"python {ocp_main()}"
     for arg in args_dict:
         command += f" --{arg} {args_dict[arg]}"
-    command += f" > {directory}/{identifier}-{step_actlearn:04d}.out 2>&1"
+    command += f" > {directory}/{identifier}.out 2>&1"
     os.system(command)
 
 # -------------------------------------------------------------------------------------

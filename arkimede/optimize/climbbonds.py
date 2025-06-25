@@ -21,66 +21,100 @@ class ClimbBonds(FixConstraint):
         rtol=1e-5,
         atol=1e-8,
         t_bound=1e+9,
-        scale_forces=1.,
+        scale_forces=2.,
+        doublehookean=True,
+        atoms_IS_FS=None,
+        bondratio_thr=1.0,
+        k_spring_displ=1.,
+        k_spring_IS_FS=1.,
+        sign_bond_dict={'break': +1, 'form': -1},
     ):
-        self.bonds = np.asarray([bond[:2] for bond in bonds])
+        self.bonds = [bond[:2] for bond in bonds]
+        self.signs = [sign_bond_dict[bond[2]] for bond in bonds]
         self.ftol = ftol
         self.rtol = rtol
         self.atol = atol
         self.t_bound = t_bound
         self.scale_forces = scale_forces
-        self.bondlengths = np.zeros(self.bonds.shape[0])
-        self.bondlengths_nat = None
+        self.bondlengths = np.zeros(len(self.bonds))
+        # Doublehookean parameters.
+        self.doublehookean = doublehookean if atoms_IS_FS else None
+        if self.doublehookean:
+            self.atoms_IS, self.atoms_FS = atoms_IS_FS
+            self.bondratio_thr = bondratio_thr
+            self.k_spring_displ = k_spring_displ
+            self.k_spring_IS_FS = k_spring_IS_FS
+            self.initialized = False
+    
+    def initialize_doublehookean(self, atoms):
+        self.initialized = True
+        self.bondlengths_min = []
+        self.bondlengths_max = []
+        self.bondlengths_ave = []
+        self.too_short = []
+        self.too_long = []
+        for ii, bond in enumerate(self.bonds):
+            bondlen_IS = self.atoms_IS.get_distance(*bond, mic=True)
+            bondlen_FS = self.atoms_FS.get_distance(*bond, mic=True)
+            self.too_short.append(False)
+            self.too_long.append(False)
+            if self.signs[ii] > 0:
+                self.bondlengths_min.append(bondlen_IS)
+                self.bondlengths_max.append(bondlen_FS)
+            else:
+                self.bondlengths_min.append(bondlen_FS)
+                self.bondlengths_max.append(bondlen_IS)
+            self.bondlengths_ave.append((bondlen_IS+bondlen_FS)/2.)
+   
+    def apply_doublehookean(self, atoms, forces):
+        if not self.initialized:
+            self.initialize_doublehookean(atoms=atoms)
+        for ii, bond in enumerate(self.bonds):
+            p1, p2 = atoms.positions[bond]
+            if self.bondlengths[ii]/self.bondlengths_min[ii] < self.bondratio_thr:
+                self.too_short[ii] = True
+                print("warning: bond too short")
+            if self.bondlengths_max[ii]/self.bondlengths[ii] < self.bondratio_thr:
+                self.too_long[ii] = True
+                print("warning: bond too long")
+            if self.bondlengths[ii] > self.bondlengths_ave[ii]:
+                self.too_short[ii] = False
+            if self.bondlengths[ii] < self.bondlengths_ave[ii]:
+                self.too_long[ii] = False
+            # Add restoring force if bond is too short.
+            if self.too_short[ii] is True:
+                displ = find_mic(p2-p1, cell=atoms.cell, pbc=True)[0]
+                if self.signs[ii] > 0:
+                    p1_ref, p2_ref = self.atoms_FS.positions[bond]
+                else:
+                    p1_ref, p2_ref = self.atoms_IS.positions[bond]
+                forces[bond[0]] += self.k_spring_IS_FS * (p1_ref - p1)
+                forces[bond[1]] += self.k_spring_IS_FS * (p2_ref - p2)
+                forces[bond[0]] -= self.k_spring_displ * displ
+                forces[bond[1]] += self.k_spring_displ * displ
+            # Add restoring force if bond is too long.
+            if self.too_long[ii] is True:
+                displ = find_mic(p2-p1, cell=atoms.cell, pbc=True)[0]
+                if self.signs[ii] > 0:
+                    p1_ref, p2_ref = self.atoms_IS.positions[bond]
+                else:
+                    p1_ref, p2_ref = self.atoms_FS.positions[bond]
+                forces[bond[0]] += self.k_spring_IS_FS * (p1_ref - p1)
+                forces[bond[1]] += self.k_spring_IS_FS * (p2_ref - p2)
+                forces[bond[0]] += self.k_spring_displ * displ
+                forces[bond[1]] -= self.k_spring_displ * displ
+
+    def adjust_forces(self, atoms, forces):
         
-        #self.thr_min = 0.80
-        #self.thr_min_ok = 0.90
-        #self.thr_max = 1.50
-        #self.thr_max_ok = 1.25
-        #self.k_spring = 5.
-    
-    #def initialize_atoms(self, atoms):
-    #    cutoffs = natural_cutoffs(atoms=atoms, mult=1.)
-    #    self.bondlengths_nat = []
-    #    self.too_short = []
-    #    self.too_long = []
-    #    
-    #    for a1, a2 in self.bonds:
-    #        self.bondlengths_nat.append(cutoffs[a1]+cutoffs[a2])
-    #        self.too_short.append(False)
-    #        self.too_long.append(False)
-    
-    #def double_hookean(self, atoms, forces):
-    #    if self.bondlengths_nat is None:
-    #        self.initialize_atoms(atoms=atoms)
-    #    for ii, bond in enumerate(self.bonds):
-    #        p1, p2 = atoms.positions[bond]
-    #        displ, bondlength = find_mic(p1-p2, cell=atoms.cell, pbc=True)
-    #        if bondlength/self.bondlengths_nat[ii] < self.thr_min:
-    #            self.too_short[ii] = True
-    #            print("too short")
-    #        elif bondlength/self.bondlengths_nat[ii] > self.thr_max:
-    #            self.too_long[ii] = True
-    #            print("too long")
-    #        if bondlength/self.bondlengths_nat[ii] > self.thr_min_ok:
-    #            self.too_short[ii] = False
-    #        if bondlength/self.bondlengths_nat[ii] < self.thr_max_ok:
-    #            self.too_long[ii] = False
-    #        # Add restoring force.
-    #        if self.too_short[ii] is True or self.too_long[ii] is True:
-    #            magnitude = self.k_spring * (bondlength - self.bondlengths_nat[ii])
-    #            direction = displ / bondlength
-    #            forces[bond[0]] += -direction * magnitude
-    #            forces[bond[1]] += +direction * magnitude
-    #        self.bondlengths[ii] = bondlength
-    
-    def adjust_momenta(self, atoms, forces):
-        
+        forces0 = forces.copy()
         masses = atoms.get_masses()
         for ii, bond in enumerate(self.bonds):
             self.bondlengths[ii] = atoms.get_distance(*bond, mic=True)
-        #self.double_hookean(atoms=atoms, forces=forces)
-        #if any(self.too_long+self.too_short):
-        #    return
+        
+        if self.doublehookean:
+            self.apply_doublehookean(atoms=atoms, forces=forces)
+            if any(self.too_long+self.too_short):
+                return
 
         def get_dforces(time, forces):
             x_dot_tot = 0.
@@ -115,10 +149,6 @@ class ClimbBonds(FixConstraint):
             solver.step()
 
         forces[:] = solver.y.reshape(-1, 3)
-
-    def adjust_forces(self, atoms, forces):
-        forces0 = forces.copy()
-        self.adjust_momenta(atoms, forces)
         self.projected_forces = forces-forces0
         forces += self.scale_forces * self.projected_forces
 

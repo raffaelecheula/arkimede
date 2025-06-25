@@ -31,9 +31,8 @@ def main():
     db_tot_name = "databases/vasp_tot.db"
     merge_databases(db_name_list=db_name_list, db_new_name=db_tot_name)
     
-    # Directory, identifier, and new yaml config file for fine-tuning.
+    # Directory and new yaml config file for fine-tuning.
     directory = "finetuning"
-    identifier = f"step-{step_actlearn+1:02d}"
     config_yaml = f"{directory}/config.yml"
     
     # OCPmodels checkpoint path.
@@ -95,7 +94,6 @@ def main():
         checkpoint_path=checkpoint_path,
         config_yaml=config_yaml,
         directory=directory,
-        identifier=identifier,
     )
 
     # Update active learning step.

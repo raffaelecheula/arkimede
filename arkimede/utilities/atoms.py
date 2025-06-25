@@ -113,7 +113,7 @@ def update_clean_slab_positions(atoms, db_ase):
 def check_same_connectivity(atoms_1, atoms_2, indices=None):
     """Check if two structures have the same connectivity."""
     if indices is None:
-        indices = atoms_1.info["indices_ads"]
+        indices = get_indices_adsorbate(atoms_1, return_mask=False)
     connectivity_1 = get_connectivity(atoms_1, indices=indices)
     connectivity_2 = get_connectivity(atoms_2, indices=indices)
     return (connectivity_1 == connectivity_2).all()
