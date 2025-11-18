@@ -23,7 +23,7 @@ def main():
     auto_construct = True
     delta_ncoord = 1
 
-     # Sites and reactions parameters.
+    # Sites and reactions parameters.
     range_edges_fun = lambda lc: [1e-2, lc + 1e-2]
     displ_max_fun = lambda lc: lc * np.sqrt(2.0) / 4.0 + 1e-3
     range_coads_fun = lambda lc: [lc * 0.4 + 1e-3, lc * 0.8 + 1e-3]
@@ -52,7 +52,7 @@ def main():
     miller_index_list = [
         "100",
         #"110",
-        #"111",
+        "111",
         #"210",
         #"211",
         #"221",
@@ -110,33 +110,32 @@ def main():
         "t-COOH**→CO2**+H*",
         "c-COOH**→CO*+OH*",
         #"H2*→H*+H*",
+        #"HCOO**→CO2**+H*",
+        #"CO*→C*+O*",
+        #"CH*→C*+H*",
+        #"CH2*→CH*+H*",
+        #"CH3*→CH2*+H*",
+        #"H3CO*→H2CO**+H*",
+        #"H2COO**→HCOO**+H*",
+        #"H2COO**→H2CO**+O*",
+        #"H2COOH**→H2COO**+H*",
+        #"H2COOH**→H2CO**+OH*",
         #"b-HCOOH**→HCOO**+H*",
         #"b-HCOOH**→c-COOH**+H*",
-        
         #"c-COOH**→COH*+O*",
-        #"HCOO**→CO2**+H*",
         #"HCOO**→HCO**+O*",
         #"HCO**→CO*+H*",
         #"HCO**→CH*+O*",
         #"COH*→CO*+H*",
         #"COH*→C*+OH*",
-        #"CO*→C*+O*",
-        #"CH*→C*+H*",
-        #"CH2*→CH*+H*",
-        #"CH3*→CH2*+H*",
-        #"H3CO*→H2CO*+H*",
-        #"H2CO**→HCO**+H*",
-        #"H2CO**→CH2**+O*",
         #"HCOH**→COH*+H*",
         #"HCOH**→HCO*+H*",
         #"HCOH**→CH*+OH*",
+        #"H2CO**→HCO**+H*",
+        #"H2CO**→CH2**+O*",
         #"H2COH**→HCOH**+H*",
         #"H2COH**→H2CO*+H*",
         #"H2COH**→CH2*+OH*",
-        #"H2COO**→HCOO**+H*",
-        #"H2COO**→H2CO**+O*",
-        #"H2COOH**→H2COO**+H*",
-        #"H2COOH**→H2CO**+OH*",
     ]
 
     # ---------------------------------------------------------------------------------

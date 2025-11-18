@@ -100,7 +100,8 @@ class Gratoms(ase.Atoms):
 
     @property
     def connectivity(self):
-        connectivity = nx.to_numpy_matrix(self._graph)
+        try: connectivity = nx.to_numpy_matrix(self._graph)
+        except: connectivity = nx.to_numpy_array(self._graph)
         connectivity = np.array(connectivity, dtype=int)
         return connectivity
 

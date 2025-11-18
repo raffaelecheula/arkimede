@@ -3,12 +3,22 @@
 # -------------------------------------------------------------------------------------
 
 import numpy as np
+from ase import Atoms
+from ase.calculators.calculator import Calculator
+from ase.optimize.optimize import Optimizer
 
 # -------------------------------------------------------------------------------------
 # MIN STEPS OBS
 # -------------------------------------------------------------------------------------
 
-def min_steps_obs(opt, min_steps, fmax):
+def min_steps_obs(
+    opt: Optimizer,
+    min_steps: int,
+    fmax: float,
+):
+    """
+    Observer setting a minimum number of steps.
+    """
     if opt.nsteps >= min_steps:
         opt.fmax = fmax
     else:
@@ -18,53 +28,49 @@ def min_steps_obs(opt, min_steps, fmax):
 # MAX FORCECALLS OBS
 # -------------------------------------------------------------------------------------
 
-def max_forcecalls_obs(opt, max_forcecalls, calc):
+def max_forcecalls_obs(
+    opt: Optimizer,
+    max_forcecalls: int,
+    calc: Calculator,
+):
+    """
+    Observer setting a maximum number of forces calls.
+    """
     if "counter" in dir(calc) and calc.counter > max_forcecalls:
         opt.max_steps = 0
-
-# -------------------------------------------------------------------------------------
-# ACTIVATE CLIMB OBS
-# -------------------------------------------------------------------------------------
-
-def activate_climb_obs(neb, ftres):
-    if neb.get_residual() < ftres:
-        neb.climb = True
-
-# -------------------------------------------------------------------------------------
-# PRINT ENERGIES OBS
-# -------------------------------------------------------------------------------------
-
-def print_energies_obs(neb, opt, print_path_energies=True):
-    fres = neb.get_residual()
-    print(f'Step: {opt.nsteps:4d} Fmax: {fres:9.4f}', end='  ')
-    for ii in (0, -1):
-        neb.energies[ii] = neb.images[ii].calc.results['energy']
-    act_energy = max(neb.energies)-neb.energies[0]
-    print(f'Eact: {act_energy:+9.4f} eV', end='  ')
-    if print_path_energies is True:
-        print(f'Epath:', end='  ')
-        for energy in neb.energies:
-            print(f'{energy-neb.energies[0]:+9.4f}', end=' ')
-        print('eV')
 
 # -------------------------------------------------------------------------------------
 # RESET EIGENMODE OBS
 # -------------------------------------------------------------------------------------
 
-def reset_eigenmode_obs(atoms_opt, bonds_TS, sign_bond_dict):
-    from arkimede.utilities import get_vector_from_bonds_TS
-    vector = get_vector_from_bonds_TS(
-        atoms=atoms_opt,
+def reset_eigenmode_obs(
+    atoms: Atoms,
+    bonds_TS: list,
+    sign_bond_dict: dict,
+):
+    """
+    Observer resetting the eigenmode of a dimer calculation.
+    """
+    from arkimede.transtates import get_mode_TS_from_bonds_TS
+    mode_TS = get_mode_TS_from_bonds_TS(
+        atoms=atoms,
         bonds_TS=bonds_TS,
         sign_bond_dict=sign_bond_dict,
     )
-    atoms_opt.eigenmodes = [vector]
+    atoms.eigenmodes = [mode_TS]
 
 # -------------------------------------------------------------------------------------
 # MAX DISPLACEMENT OBS
 # -------------------------------------------------------------------------------------
 
-def max_displacement_obs(atoms_new, atoms_old, max_displacement):
+def max_displacement_obs(
+    atoms_new: Atoms,
+    atoms_old: Atoms,
+    max_displacement: float,
+):
+    """
+    Observer stopping the calculation when the atoms are too distant from the start.
+    """
     displ = np.linalg.norm(atoms_new.positions-atoms_old.positions)
     if displ > max_displacement:
         raise RuntimeError("atoms displaced too much")
@@ -73,17 +79,29 @@ def max_displacement_obs(atoms_new, atoms_old, max_displacement):
 # MAX FORCE TOT OBS
 # -------------------------------------------------------------------------------------
 
-def max_force_tot_obs(atoms_opt, max_force_tot):
-    if (atoms_opt.get_forces() ** 2).sum(axis=1).max() > max_force_tot ** 2:
+def max_force_tot_obs(
+    atoms: Atoms,
+    max_force_tot: float,
+):
+    """
+    Observer stopping the calculation when the maximum force is too high.
+    """
+    if np.max(np.linalg.norm(atoms.get_forces(), axis=1)) > max_force_tot:
         raise RuntimeError("max force too high")
 
 # -------------------------------------------------------------------------------------
 # ATOMS TOO CLOSE OBS
 # -------------------------------------------------------------------------------------
 
-def atoms_too_close_obs(atoms_opt, mindist=0.2):
-    for ii, position in enumerate(atoms_opt.positions):
-        distances = np.linalg.norm(atoms_opt.positions[ii+1:]-position, axis=1)
+def atoms_too_close_obs(
+    atoms: Atoms,
+    mindist: float = 0.2,
+):
+    """
+    Observer stopping the calculation when two atoms are too close to each other.
+    """
+    for ii, position in enumerate(atoms.positions):
+        distances = np.linalg.norm(atoms.positions[ii+1:]-position, axis=1)
         duplicates = np.where(distances < mindist)[0]
         if len(duplicates) > 0:
             raise RuntimeError("atoms too close")

@@ -4,7 +4,6 @@ checkpoints/*
 examples/databases*
 examples/calculations*
 examples/finetuning*
-examples/actlearn.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

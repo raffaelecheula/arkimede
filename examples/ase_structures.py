@@ -491,7 +491,10 @@ def get_atoms_gas(species, vacuum=12.0):
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = True
-        dissoc_dict = {}
+        dissoc_dict = {
+            "HCOO**+H*": {"bond_break": [0, 3], "bonds_surf": [1, 2, 3]},
+            "H2CO**+O*": {"bond_break": [0, 2], "bonds_surf": [0, 1, 2]},
+        }
 
     elif species == "H2COOH**":
         bonds_surf = [1, 2]
@@ -499,6 +502,7 @@ def get_atoms_gas(species, vacuum=12.0):
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
         dissoc_dict = {
+            "H2COO**+H*": {"bond_break": [1, 5], "bonds_surf": [1, 2, 5]},
             "H2CO**+OH*": {"bond_break": [0, 1], "bonds_surf": [0, 1, 2]},
         }
 
@@ -507,14 +511,18 @@ def get_atoms_gas(species, vacuum=12.0):
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = top_brg_combinations[:]
         symmetric_ads = False
-        dissoc_dict = {}
+        dissoc_dict = {
+            "HCO**+H*": {},
+        }
 
     elif species == "H3CO*":
         bonds_surf = [1]
         atoms_gas = molecule(gas_name, bond_index=bonds_surf)[0]
         sites_names = None
         symmetric_ads = False
-        dissoc_dict = {}
+        dissoc_dict = {
+            "H2CO**+H*": {"bond_break": [0, 4], "bonds_surf": [0, 1, 4]},
+        }
 
     elif species == "HCOH**":
         bonds_surf = [0, 1]

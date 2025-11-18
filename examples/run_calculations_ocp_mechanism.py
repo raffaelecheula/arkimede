@@ -5,9 +5,6 @@
 from ase.db import connect
 from arkimede.workflow.reaction_workflow import run_ase_calculations_mechanism
 from arkimede.utilities import get_atoms_list_from_db_metadata, read_step_actlearn
-from arkimede.ocp.ocp_utils import get_checkpoint_path, get_checkpoint_path_actlearn
-from arkimede.ocp.ocp_calc import OCPCalculatorCounter
-#from chgnet.model.dynamics import CHGNetCalculator
 
 # -------------------------------------------------------------------------------------
 # MAIN
@@ -66,14 +63,29 @@ def main():
     write_images = False
     basedir_trajs = "calculations/ocp"
 
-    # OCPmodels ase calculator.
-    checkpoint_key = 'GemNet-OC OC20+OC22 v2'
-    if step_actlearn == 0:
-        checkpoint_path = get_checkpoint_path(checkpoint_key=checkpoint_key)
-    else:
-        checkpoint_path = get_checkpoint_path_actlearn(step_actlearn=step_actlearn)
-    calc = OCPCalculatorCounter(checkpoint_path=checkpoint_path, cpu=False)
-    #calc = CHGNetCalculator()
+    mlp_name = "ocp"
+
+    if mlp_name == "ocp":
+        # OCPmodels ase calculator.
+        from mlps_finetuning.ocp import OCPCalculator
+        calc = OCPCalculator(
+            model_name="GemNet-OC-S2EFS-OC20+OC22",
+            local_cache="pretrained_models",
+            cpu=False,
+        )
+    elif mlp_name == "chgnet":
+        # CHGNetCalculator ase calculator.
+        from mlps_finetuning.chgnet import CHGNetCalculator
+        calc = CHGNetCalculator(use_device=None)
+    elif mlp_name == "fairchem":
+        # FairChem ase calculator.
+        from mlps_finetuning.fairchem import FAIRChemCalculator, pretrained_mlip
+        predict_unit = pretrained_mlip.get_predict_unit(
+            model_name="uma-s-1p1",
+            device="cuda",
+            cache_dir="pretrained_models",
+        )
+        calc = FAIRChemCalculator(predict_unit=predict_unit, task_name="oc20")
     
     # ---------------------------------------------------------------------------------
     # RUN ASE CALCULATIONS

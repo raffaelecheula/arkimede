@@ -4,104 +4,150 @@
 
 import os
 import numpy as np
+from copy import deepcopy
+from ase import Atoms
 from ase.io import Trajectory
-from ase.optimize import BFGS, LBFGS, ODE12r
-try: from ase.neb import NEB, NEBOptimizer
-except: from ase.mep.neb import NEB, NEBOptimizer
+from ase.calculators.calculator import Calculator
+from ase.optimize.optimize import Optimizer
+from ase.optimize import BFGS
+try: from ase.mep.neb import NEB, NEBOptimizer
+except: from ase.neb import NEB, NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
+
 from arkimede.utilities import (
-    get_indices_fixed,
     get_indices_not_fixed,
     get_indices_adsorbate,
     filter_results,
     update_atoms_from_atoms_opt,
 )
-from arkimede.optimize.observers import (
+from arkimede.workflow.observers import (
     min_steps_obs,
     max_forcecalls_obs,
-    activate_climb_obs,
-    print_energies_obs,
-    reset_eigenmode_obs,
     max_displacement_obs,
     max_force_tot_obs,
     atoms_too_close_obs,
 )
 
 # -------------------------------------------------------------------------------------
+# HAS CONVERGED
+# -------------------------------------------------------------------------------------
+
+def has_converged(
+    opt: Optimizer,
+) -> bool:
+    """
+    Check if a calculation has converged.
+    """
+    try:
+        return opt.converged()
+    except:
+        return opt.converged(gradient=opt.optimizable.get_gradient())
+
+# -------------------------------------------------------------------------------------
+# RUN SINGLE-POINT CALCULATION
+# -------------------------------------------------------------------------------------
+
+def run_singlepoint_calculation(
+    atoms: Atoms,
+    calc: Calculator,
+    properties: list = ["energy", "forces"],
+    no_constraints: bool = False,
+    **kwargs: dict,
+) -> None:
+    """
+    Run a single-point calculation.
+    """
+    # Prepare a copy of atoms.
+    atoms_opt = atoms.copy()
+    atoms_opt.calc = calc
+    # Remove contraints for MLP fine-tuning from DFT calculations.
+    if no_constraints is True:
+        atoms_opt.constraints = []
+    # Run the calculation.
+    try:
+        atoms_opt.get_potential_energy()
+        status = "finished"
+    except Exception as error:
+        print(error)
+        status = "failed"
+    # Update the input atoms with the results of the calculation.
+    update_atoms_from_atoms_opt(
+        atoms=atoms,
+        atoms_opt=atoms_opt,
+        status=status,
+        properties=properties,
+        update_cell=False,
+    )
+
+# -------------------------------------------------------------------------------------
 # RUN RELAX CALCULATION
 # -------------------------------------------------------------------------------------
 
 def run_relax_calculation(
-    atoms,
-    calc,
-    fmax=0.05,
-    max_steps=300,
-    min_steps=None,
-    logfile='-',
-    label='relax',
-    directory='.',
-    save_trajs=False,
-    write_images=False,
-    update_cell=False,
-    optimizer=BFGS,
-    max_forcecalls=None,
-    kwargs_opt={},
-    properties=["energy", "forces"],
-    **kwargs,
-):
-    """Run a relax calculation."""
-
+    atoms: Atoms,
+    calc: Calculator,
+    fmax: float = 0.05,
+    max_steps: int = 300,
+    min_steps: int = None,
+    logfile: str = "-",
+    label: str = "relax",
+    directory: str = ".",
+    trajectory: str = None,
+    save_trajs: bool = False,
+    write_images: bool = False,
+    update_cell: bool = False,
+    properties: list = ["energy", "forces"],
+    optimizer: Optimizer = BFGS,
+    kwargs_opt: dict = {},
+    max_forcecalls: int = None,
+    **kwargs: dict,
+) -> None:
+    """
+    Run a relax calculation.
+    """
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
         os.makedirs(directory, exist_ok=True)
-
     # Name of the trajectory file.
-    trajname = None
-    if save_trajs is True:
-        trajname = os.path.join(directory, f'{label}.traj')
-
-    # Set up the optimizer.
+    if trajectory is None:
+        trajectory = os.path.join(directory, f"{label}.traj") if save_trajs else None
+    # Prepare a copy of atoms.
     atoms_opt = atoms.copy()
     atoms_opt.calc = calc
+    # Set up the optimizer.
     opt = optimizer(
         atoms=atoms_opt,
         logfile=logfile,
-        trajectory=trajname,
+        trajectory=trajectory,
         **kwargs_opt,
     )
-    
     # Observer to set a minimum number of steps.
-    if min_steps:
+    if min_steps is not None:
         kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
-    
     # Observer to set a maximum of forces calls.
-    if max_forcecalls:
+    if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
         calc.counter = 0
-    
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=max_steps)
-        converged = opt.converged()
+        fmax_start = fmax if min_steps is None else 0.
+        opt.run(fmax=fmax_start, steps=max_steps)
+        status = "finished" if has_converged(opt=opt) else "unfinished"
     except Exception as error:
         print(error)
-        converged = False
-    
+        status = "failed"
     # Update the input atoms with the results of the calculation.
-    atoms = update_atoms_from_atoms_opt(
+    update_atoms_from_atoms_opt(
         atoms=atoms,
         atoms_opt=atoms_opt,
-        converged=converged,
-        modified=False,
+        status=status,
         properties=properties,
         update_cell=update_cell,
     )
-
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
@@ -112,98 +158,106 @@ def run_relax_calculation(
 # -------------------------------------------------------------------------------------
 
 def run_neb_calculation(
-    images,
-    calc,
-    fmax=0.05,
-    max_steps=300,
-    min_steps=None,
-    k_neb=1.00,
-    label='neb',
-    directory='.',
-    save_trajs=False,
-    write_images=False,
-    logfile='-',
-    optimizer=NEBOptimizer,
-    kwargs_opt={},
-    activate_climb=True,
-    print_energies=False,
-    ftres_climb=0.10,
-    max_forcecalls=None,
-    **kwargs,
-):
-    """Run a NEB calculation."""
-    
+    images: list,
+    calc: Calculator,
+    fmax: float = 0.05,
+    max_steps: int = 300,
+    min_steps: int = None,
+    logfile: str = "-",
+    label: str = "neb",
+    directory: str = ".",
+    trajectory: str = None,
+    save_trajs: bool = False,
+    write_images: bool = False,
+    optimizer: Optimizer = BFGS,
+    kwargs_opt: dict = {},
+    k_neb: float = 1.00,
+    climb: bool = False,
+    parallel: bool = False,
+    allow_shared_calculator: bool = True,
+    kwargs_neb: dict = {"method": "aseneb"},
+    activate_climb: bool = True,
+    print_energies: bool = False,
+    converged_TS: bool = False,
+    ftres_climb: float = 0.10,
+    max_forcecalls: int = None,
+    **kwargs: dict,
+) -> None:
+    """
+    Run a NEB calculation.
+    """
+    from arkimede.workflow.neb import (
+        activate_climb_obs,
+        print_energies_obs,
+        converged_TS_obs,
+        TSConverged,
+    )
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
         os.makedirs(directory, exist_ok=True)
-    
     # Name of the trajectory file.
-    trajname = None
-    if save_trajs is True:
-        trajname = os.path.join(directory, f'{label}.traj')
-    
+    if trajectory is None:
+        trajectory = os.path.join(directory, f"{label}.traj") if save_trajs else None
     # Set up NEB method.
     neb = NEB(
         images=images,
         k=k_neb,
-        climb=False,
-        parallel=False,
-        method='aseneb',
-        allow_shared_calculator=True,
+        climb=climb,
+        parallel=parallel,
+        allow_shared_calculator=allow_shared_calculator,
+        **kwargs_neb,
     )
-    for atoms in images:
-        atoms.calc = calc
+    # Set calculator to images.
+    for ii in range(len(images)):
+        images[ii].calc = calc if allow_shared_calculator else deepcopy(calc)
+    # Substitute calculator of initial and final images.
     for ii in (0, -1):
         images[ii].get_potential_energy()
         results = filter_results(results=images[ii].calc.results)
         images[ii].calc = SinglePointCalculator(atoms=images[ii], **results)
-    
     # Set up the optimizer.
     opt = optimizer(neb, logfile=logfile, **kwargs_opt)
-    
     # Observer for activating the climbing image.
-    if activate_climb:
+    if activate_climb is True:
         kwargs_obs = {"neb": neb, "ftres": ftres_climb}
         opt.attach(activate_climb_obs, interval=1, **kwargs_obs)
-    
     # Observer to print the energies of the path images.
-    if print_energies:
+    if print_energies is True:
         kwargs_obs = {"neb": neb, "opt": opt, "print_path_energies": True}
         opt.attach(print_energies_obs, interval=1, **kwargs_obs)
-    
+    # Observer that stops the calculation if the TS forces are below the threshold.
+    if converged_TS is True:
+        kwargs_obs = {"neb": neb, "opt": opt, "fmax": fmax}
+        opt.attach(converged_TS_obs, interval=1, **kwargs_obs)
     # Observer to set a minimum number of steps.
-    if min_steps:
+    if min_steps is not None:
         kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
-
     # Observer to set a maximum of forces calls.
-    if max_forcecalls:
+    if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
         calc.counter = 0
-
-    # Run the calculation. The while is to keep NEBOptimizer going when 
-    # it fails randomly.
+    # Run the calculation (and restart NEBOptimizer when it fails randomly).
     converged = False
+    fmax_start = fmax if min_steps is None else 0.
     while opt.nsteps < max_steps and not converged:
-        converged = opt.run(fmax=fmax, steps=max_steps-opt.nsteps)
-    
+        try:
+            converged = opt.run(fmax=fmax, steps=max_steps-opt.nsteps)
+        except TSConverged as stop:
+            converged = True
     # Write trajectory.
     if save_trajs is True:
-        with Trajectory(filename=trajname, mode='w') as traj:
+        with Trajectory(filename=trajectory, mode="w") as traj:
             for atoms in images:
                 traj.write(atoms, **atoms.calc.results)
-    
     # Update images with the results.
     for atoms in images:
-        atoms.info["modified"] = False
-        atoms.info["converged"] = bool(converged)
+        atoms.info["status"] = "finished" if converged else "unfinished"
         if "counter" in dir(calc):
             atoms.info["counter"] = calc.counter
-
     # Write images.
     if write_images is True:
         index_TS = np.argmax([atoms.get_potential_energy() for atoms in images])
@@ -216,50 +270,53 @@ def run_neb_calculation(
 # -------------------------------------------------------------------------------------
 
 def run_dimer_calculation(
-    atoms,
-    calc,
-    bonds_TS=None,
-    vector=None,
-    label='dimer',
-    directory='.',
-    save_trajs=False,
-    write_images=False,
-    update_cell=False,
-    logfile='-',
-    fmax=0.05,
-    max_steps=500,
-    min_steps=None,
-    max_displacement=False,
-    max_force_tot=50.,
-    reset_eigenmode=False,
-    max_forcecalls=None,
-    sign_bond_dict={'break': +1, 'form': -1},
-    properties=["energy", "forces"],
-    kwargs_dimer={},
-    **kwargs,
-):
-    """Run a dimer calculation."""
-    from ase.dimer import DimerControl, MinModeAtoms, MinModeTranslate
-    from arkimede.utilities import get_vector_from_bonds_TS
-
+    atoms: Atoms,
+    calc: Calculator,
+    fmax: float = 0.05,
+    max_steps: int = 500,
+    min_steps: int = None,
+    logfile: str = "-",
+    label: str = "dimer",
+    directory: str = ".",
+    trajectory: str = None,
+    save_trajs: bool = False,
+    write_images: bool = False,
+    update_cell: bool = False,
+    properties: list = ["energy", "forces"],
+    bonds_TS: list = None,
+    mode_TS: np.ndarray = None,
+    kwargs_dimer: dict = {},
+    max_displacement: float = None,
+    max_force_tot: float = None,
+    reset_eigenmode: bool = False,
+    max_forcecalls: int = None,
+    sign_bond_dict: dict = {"break": +1, "form": -1},
+    **kwargs: dict,
+) -> None:
+    """
+    Run a Dimer TS-search calculation.
+    """
+    try: from ase.mep import DimerControl, MinModeAtoms, MinModeTranslate
+    except: from ase.dimer import DimerControl, MinModeAtoms, MinModeTranslate
+    from arkimede.workflow.observers import reset_eigenmode_obs
+    # Get TS bonds from info dictionary.
+    if bonds_TS is None:
+        bonds_TS = atoms.info["bonds_TS"]
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
         os.makedirs(directory, exist_ok=True)
-
     # Name of the trajectory file.
-    trajname = None
-    if save_trajs is True:
-        trajname = os.path.join(directory, f'{label}.traj')
-
-    if vector is None:
-        vector = atoms.info.get("vector").copy()
-
+    if trajectory is None:
+        trajectory = os.path.join(directory, f"{label}.traj") if save_trajs else None
+    # Set up the dimer calculation.
     atoms.calc = calc
     mask = get_indices_not_fixed(atoms, return_mask=True)
-    
+    if mode_TS is None:
+        mode_TS = atoms.info.get("mode_TS").copy()
+    # Dimer parameters.
     kwargs_dimer_opt = {
-        "initial_eigenmode_method": 'displacement',
-        "displacement_method": 'vector',
+        "initial_eigenmode_method": "displacement",
+        "displacement_method": "vector",
         "logfile": None,
         "cg_translation": True,
         "use_central_forces": True,
@@ -267,213 +324,176 @@ def run_dimer_calculation(
         "order": 1,
         "f_rot_min": 0.10,
         "f_rot_max": 1.00,
-        "max_num_rot": 6, # modified
-        "trial_angle": np.pi/6, # modified
-        "trial_trans_step": 0.005, # modified
-        "maximum_translation": 0.050, # modified
-        "dimer_separation": 0.005, # modified
     }
     kwargs_dimer_opt.update(kwargs_dimer)
-    
+    # Set up the dimer atoms.
     dimer_control = DimerControl(**kwargs_dimer_opt)
     atoms_opt = MinModeAtoms(
         atoms=atoms,
         control=dimer_control,
         mask=mask,
     )
-    vector *= kwargs_dimer_opt["maximum_translation"]/np.linalg.norm(vector)
-    atoms_opt.displace(displacement_vector=vector, mask=mask)
-
+    mode_TS *= kwargs_dimer_opt.get("maximum_translation", 0.1)/np.linalg.norm(mode_TS)
+    atoms_opt.displace(displacement_vector=mode_TS, mask=mask)
+    # Set up the dimer optimizer.
     opt = MinModeTranslate(
-        atoms=atoms_opt,
-        trajectory=trajname,
+        dimeratoms=atoms_opt,
+        trajectory=trajectory,
         logfile=logfile,
     )
-    
     # Observer that reset the eigenmode to the direction of the ts bonds.
-    # Maybe there is a better way of doing this (e.g., selecting the 
-    # eigenmode most similar to the directions of the ts bonds).
-    if bonds_TS and reset_eigenmode:
+    if bonds_TS and reset_eigenmode is True:
         kwargs_obs = {
-            "atoms_opt": atoms_opt,
+            "atoms": atoms_opt,
             "bonds_TS": bonds_TS,
             "sign_bond_dict": sign_bond_dict,
         }
         opt.attach(reset_eigenmode_obs, interval=1, **kwargs_obs)
-    
     # Observer that checks the displacement of the ts from the starting position.
-    if max_displacement:
+    if max_displacement is not None:
         kwargs_obs = {
             "atoms_new": atoms_opt,
             "atoms_old": atoms,
             "max_displacement": max_displacement,
         }
         opt.attach(function=max_displacement_obs, interval=10, **kwargs_obs)
-    
     # Observer to stop the calculation if the maximum force is too high.
-    if max_force_tot:
-        kwargs_obs = {"atoms_opt": atoms_opt, "max_force_tot": max_force_tot}
+    if max_force_tot is not None:
+        kwargs_obs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
         opt.attach(function=max_force_tot_obs, interval=10, **kwargs_obs)
-    
     # Observer to set a minimum number of steps.
-    if min_steps:
+    if min_steps is not None:
         kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
-    
     # Observer to set a maximum of forces calls.
-    if max_forcecalls:
+    if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
         calc.counter = 0
-    
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=max_steps)
-        converged = opt.converged()
+        fmax_start = fmax if min_steps is None else 0.
+        opt.run(fmax=fmax_start, steps=max_steps)
+        status = "finished" if has_converged(opt=opt) else "unfinished"
     except Exception as error:
         print(error)
-        converged = False
-    
+        status = "failed"
     # Update the input atoms with the results of the calculation.
-    atoms = update_atoms_from_atoms_opt(
+    update_atoms_from_atoms_opt(
         atoms=atoms,
         atoms_opt=atoms_opt,
-        converged=converged,
-        modified=False,
+        status=status,
         properties=properties,
         update_cell=update_cell,
     )
-    atoms.info["vector"] = atoms_opt.eigenmodes[0]
+    atoms.info["mode_TS"] = atoms_opt.eigenmodes[0]
     if "counter" in dir(calc):
         atoms.info["counter"] = calc.counter
-    
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
         atoms.write(filename, radii=0.9, scale=200)
 
 # -------------------------------------------------------------------------------------
-# RUN CLIMBBONDS CALCULATION
+# RUN CLIMB TS BONDS CALCULATION
 # -------------------------------------------------------------------------------------
 
-def run_climbbonds_calculation(
-    atoms,
-    bonds_TS,
-    calc,
-    label='climbbonds',
-    directory='.',
-    save_trajs=False,
-    write_images=False,
-    update_cell=False,
-    logfile='-',
-    fmax=0.05,
-    max_steps=500,
-    min_steps=None,
-    max_displacement=None,
-    max_force_tot=50.,
-    atoms_too_close=False,
-    max_forcecalls=None,
-    optimizer=ODE12r,
-    atoms_IS_FS=None,
-    kwargs_opt={},
-    properties=["energy", "forces"],
-    propagate_forces=True,
-    only_bond_type="break",
-    **kwargs,
-):
-    """Run a climbbonds calculation."""
-    from arkimede.optimize.climbbonds import ClimbBonds
-    
+def run_climbtsbonds_calculation(
+    atoms: Atoms,
+    calc: Calculator,
+    fmax: float = 0.05,
+    max_steps: int = 500,
+    min_steps: int = None,
+    logfile: str = "-",
+    label: str = "climbtsbonds",
+    directory: str = ".",
+    trajectory: str = None,
+    save_trajs: bool = False,
+    write_images: bool = False,
+    update_cell: bool = False,
+    properties: list = ["energy", "forces"],
+    optimizer: Optimizer = BFGS,
+    kwargs_opt: dict = {"maxstep": 0.01},
+    bonds_TS: list = None,
+    max_displacement: float = None,
+    max_force_tot: float = None,
+    atoms_too_close: bool = False,
+    max_forcecalls: int = None,
+    **kwargs: dict,
+) -> None:
+    """
+    Run a ClimbTSBonds TS-search calculation.
+    """
+    from arkimede.optimize.climbtsbonds import ClimbTSBonds
+    # Get TS bonds from info dictionary.
+    if bonds_TS is None:
+        bonds_TS = atoms.info["bonds_TS"]
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
         os.makedirs(directory, exist_ok=True)
-    
     # Name of the trajectory file.
-    trajname = None
-    if save_trajs is True:
-        trajname = os.path.join(directory, f'{label}.traj')
-    
-    # Invert the forces only for a type of bond ("break" or "form").
-    if only_bond_type is not None:
-        bonds_TS_new = [bond for bond in bonds_TS if bond[2] == only_bond_type]
-        if len(bonds_TS_new) > 0:
-            bonds_TS = bonds_TS_new
-    
-    # Create a copy of the atoms object to not mess with constraints.
+    if trajectory is None:
+        trajectory = os.path.join(directory, f"{label}.traj") if save_trajs else None
+    # Prepare a copy of atoms.
     atoms_opt = atoms.copy()
     atoms_opt.calc = calc
-    atoms_opt.constraints.append(ClimbBonds(bonds=bonds_TS, atoms_IS_FS=atoms_IS_FS))
-    
-    # Add forces propagation to improve convergence.
-    if propagate_forces is True:
-        from arkimede.optimize.constraints import PropagateForces
-        atoms_opt.constraints.append(PropagateForces())
-
+    atoms_opt.constraints.append(ClimbTSBonds(bonds=bonds_TS))
     # Set up the optimizer.
     opt = optimizer(
         atoms=atoms_opt,
         logfile=logfile,
-        trajectory=trajname,
+        trajectory=trajectory,
         **kwargs_opt,
     )
-    
     # Observer that checks the displacement of the ts from the starting position.
-    if max_displacement:
+    if max_displacement is not None:
         kwargs_obs = {
             "atoms_new": atoms_opt,
             "atoms_old": atoms,
             "max_displacement": max_displacement,
         }
         opt.attach(function=max_displacement_obs, interval=10, **kwargs_obs)
-    
     # Observer to stop the calculation if the maximum force is too high.
-    if max_force_tot:
-        kwargs_obs = {"atoms_opt": atoms_opt, "max_force_tot": max_force_tot}
+    if max_force_tot is not None:
+        kwargs_obs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
         opt.attach(function=max_force_tot_obs, interval=10, **kwargs_obs)
-    
-    ## Observer to stop the calculation if two atoms are too close to each other.
-    if atoms_too_close:
-        kwargs_obs = {"atoms_opt": atoms_opt}
+    # Observer to stop the calculation if two atoms are too close to each other.
+    if atoms_too_close is True:
+        kwargs_obs = {"atoms": atoms_opt}
         opt.attach(function=atoms_too_close_obs, interval=10, **kwargs_obs)
-    
     # Observer to set a minimum number of steps.
-    if min_steps:
+    if min_steps is not None:
         kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
-    
     # Observer to set a maximum of forces calls.
-    if max_forcecalls:
+    if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
         calc.counter = 0
-    
     # Run the calculation.
     failed = 0
     converged = False
+    fmax_start = fmax if min_steps is None else 0.
     while opt.nsteps < max_steps and failed < 100 and not converged:
         try:
-            opt.run(fmax=fmax, steps=max_steps-opt.nsteps)
-            converged = opt.converged()
+            converged = opt.run(fmax_start, steps=max_steps-opt.nsteps)
+            status = "finished" if has_converged(opt=opt) else "unfinished"
         except Exception as error:
             print(error)
+            status = "failed"
             failed += 1
-    
     # Update the input atoms with the results of the calculation.
-    atoms = update_atoms_from_atoms_opt(
+    update_atoms_from_atoms_opt(
         atoms=atoms,
         atoms_opt=atoms_opt,
-        converged=converged,
-        modified=False,
+        status=status,
         properties=properties,
         update_cell=update_cell,
     )
-
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
@@ -484,105 +504,101 @@ def run_climbbonds_calculation(
 # -------------------------------------------------------------------------------------
 
 def run_climbfixint_calculation(
-    atoms,
-    bonds_TS,
-    calc,
-    label='climbfixint',
-    index_constr2climb=0,
-    directory='.',
-    save_trajs=False,
-    write_images=False,
-    update_cell=False,
-    logfile='-',
-    fmax=0.05,
-    max_steps=500,
-    min_steps=None,
-    optB_kwargs={'logfile': '-', 'trajectory': None},
-    max_displacement=None,
-    max_force_tot=50.,
-    max_forcecalls=None,
-    properties=["energy", "forces"],
-    kwargs_opt={},
-    **kwargs,
-):
-    """Run a climbfixinternals calculation."""
-    from arkimede.optimize.climbfixinternals import (
-        FixInternals,
-        BFGSClimbFixInternals,
-    )
-    
+    atoms: Atoms,
+    calc: Calculator,
+    fmax: float = 0.05,
+    max_steps: int = 500,
+    min_steps: int = None,
+    logfile: str = "-",
+    label: str = "climbfixint",
+    directory: str = ".",
+    trajectory: str = None,
+    save_trajs: bool = False,
+    write_images: bool = False,
+    update_cell: bool = False,
+    properties: list = ["energy", "forces"],
+    bonds_TS: list = None,
+    mic: bool = True,
+    epsilon: float = 1e-7,
+    kwargs_opt: dict = {"maxstep": 0.05},
+    optB_kwargs: dict = {"maxstep": 0.05},
+    optB_max_steps: int = 200,
+    max_displacement: float = None,
+    max_force_tot: float = None,
+    max_forcecalls: int = None,
+    **kwargs: dict,
+) -> None:
+    """
+    Run a ClimbFixInternals TS-search calculation.
+    """
+    from ase.constraints import FixInternals
+    from arkimede.workflow.climbfixinternals import BFGSClimbFixInternals
+    # Get TS bonds from info dictionary.
+    if bonds_TS is None:
+        bonds_TS = atoms.info["bonds_TS"]
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
         os.makedirs(directory, exist_ok=True)
-    
     # Name of the trajectory file.
-    trajname = None
-    if save_trajs is True:
-        trajname = os.path.join(directory, f'{label}.traj')
-    
-    # Create a copy of the atoms object to not mess with constraints.
+    if trajectory is None:
+        trajectory = os.path.join(directory, f"{label}.traj") if save_trajs else None
+    # Prepare a copy of atoms.
     atoms_opt = atoms.copy()
     atoms_opt.calc = calc
-    
-    bonds = [[None, bond[:2]] for bond in bonds_TS]
-    atoms_opt.set_constraint([FixInternals(bonds=bonds)]+atoms.constraints)
-    
+    # Set up the ClimbFixInternal calculation.
+    climb_coordinate = [bond[:2]+[1.0] for bond in bonds_TS]
+    bondcombos = [[None, climb_coordinate]]
+    atoms_opt.constraints += [
+        FixInternals(bondcombos=bondcombos, mic=mic, epsilon=epsilon)
+    ]
     # Optimizer for ClimbFixInternal.
+    optB_kwargs_opt = {"logfile": "-", "trajectory": "atoms.traj"}
+    optB_kwargs_opt.update(optB_kwargs)
     opt = BFGSClimbFixInternals(
         atoms=atoms_opt,
         logfile=logfile,
-        trajectory=trajname,
-        index_constr2climb=index_constr2climb,
-        optB_kwargs=optB_kwargs,
+        trajectory=trajectory,
+        climb_coordinate=climb_coordinate,
+        optB_kwargs=optB_kwargs_opt,
+        optB_max_steps=optB_max_steps,
+        max_force_tot=max_force_tot,
         **kwargs_opt,
     )
-    
     # Observer that checks the displacement of the ts from the starting position.
-    if max_displacement:
+    if max_displacement is not None:
         kwargs_obs = {
             "atoms_new": atoms_opt,
             "atoms_old": atoms,
             "max_displacement": max_displacement,
         }
         opt.attach(function=max_displacement_obs, interval=10, **kwargs_obs)
-    
-    # Observer to stop the calculation if the maximum force is too high.
-    if max_force_tot:
-        kwargs_obs = {"atoms_opt": atoms_opt, "max_force_tot": max_force_tot}
-        opt.attach(function=max_force_tot_obs, interval=10, **kwargs_obs)
-    
     # Observer to set a minimum number of steps.
-    if min_steps:
+    if min_steps is not None:
         kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
-    
     # Observer to set a maximum of forces calls.
-    if max_forcecalls:
+    if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
         calc.counter = 0
-    
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=max_steps)
-        converged = opt.converged()
+        fmax_start = fmax if min_steps is None else 0.
+        opt.run(fmax=fmax_start, steps=max_steps)
+        status = "finished" if has_converged(opt=opt) else "unfinished"
     except Exception as error:
         print(error)
-        converged = False
-    
+        status = "failed"
     # Update the input atoms with the results of the calculation.
-    atoms = update_atoms_from_atoms_opt(
+    update_atoms_from_atoms_opt(
         atoms=atoms,
         atoms_opt=atoms_opt,
-        converged=converged,
-        modified=False,
+        status=status,
         properties=properties,
         update_cell=update_cell,
     )
-
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
@@ -593,83 +609,88 @@ def run_climbfixint_calculation(
 # -------------------------------------------------------------------------------------
 
 def run_sella_calculation(
-    atoms,
-    calc,
-    label='sella',
-    directory='.',
-    save_trajs=False,
-    write_images=False,
-    update_cell=False,
-    logfile='-',
-    fmax=0.05,
-    max_steps=500,
-    min_steps=None,
-    max_forcecalls=None,
-    properties=["energy", "forces"],
-    kwargs_opt={},
-    **kwargs,
-):
-    """Run a sella calculation."""
+    atoms: Atoms,
+    calc: Calculator,
+    fmax: float = 0.05,
+    max_steps: int = 500,
+    min_steps: int = None,
+    logfile: str = "-",
+    label: str = "sella",
+    directory: str = ".",
+    trajectory: str = None,
+    save_trajs: bool = False,
+    write_images: bool = False,
+    update_cell: bool = False,
+    properties: list = ["energy", "forces"],
+    kwargs_opt: dict = {"eta": 0.01},
+    bonds_TS: list = None,
+    modify_hessian: bool = False,
+    max_force_tot: float = None,
+    max_forcecalls: int = None,
+    sign_bond_dict: dict = {"break": +1, "form": -1},
+    **kwargs: dict,
+) -> None:
+    """
+    Run a Sella TS-search calculation.
+    """
     from sella import Sella, Constraints
-
+    from arkimede.workflow.sella import modify_hessian_obs
+    # Get TS bonds from info dictionary.
+    if bonds_TS is None:
+        bonds_TS = atoms.info["bonds_TS"]
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
         os.makedirs(directory, exist_ok=True)
-
     # Name of the trajectory file.
-    trajname = None
-    if save_trajs is True:
-        trajname = os.path.join(directory, f'{label}.traj')
-
+    if trajectory is None:
+        trajectory = os.path.join(directory, f"{label}.traj") if save_trajs else None
+    # Prepare a copy of atoms.
     atoms_opt = atoms.copy()
     atoms_opt.calc = calc
-    indices = get_indices_fixed(atoms_opt, return_mask=False)
-    
-    atoms_opt.constraints = []
-    constraints = Constraints(atoms_opt)
-    for ii in indices:
-        constraints.fix_translation(ii)
-    
+    # Set up the Sella optimizer.
     opt = Sella(
         atoms=atoms_opt,
-        constraints=constraints,
-        trajectory=trajname,
+        trajectory=trajectory,
         logfile=logfile,
         **kwargs_opt,
     )
-    
+    # Observer that modifies the hessian adding curvature to TS bonds.
+    if modify_hessian is True:
+        kwargs_obs = {"opt": opt, "bonds_TS": bonds_TS}
+        opt.attach(modify_hessian_obs, interval=1, **kwargs_obs)
     # Observer to set a minimum number of steps.
-    if min_steps:
+    if min_steps is not None:
         kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
-    
     # Observer to set a maximum of forces calls.
-    if max_forcecalls:
+    if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    
+    # Observer to stop the calculation if the maximum force is too high.
+    if max_force_tot is not None:
+        kwargs_obs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
+        opt.attach(function=max_force_tot_obs, interval=10, **kwargs_obs)
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
         calc.counter = 0
-    
+    fmax_start = fmax if min_steps is None else 0.
+    opt.run(fmax=fmax_start, steps=max_steps)
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=max_steps)
-        converged = opt.converged()
+        fmax_start = fmax if min_steps is None else 0.
+        opt.run(fmax=fmax_start, steps=max_steps)
+        status = "finished" if has_converged(opt=opt) else "unfinished"
     except Exception as error:
         print(error)
-        converged = False
-    
+        status = "failed"
     # Update the input atoms with the results of the calculation.
-    atoms = update_atoms_from_atoms_opt(
+    update_atoms_from_atoms_opt(
         atoms=atoms,
         atoms_opt=atoms_opt,
-        converged=converged,
-        modified=False,
+        status=status,
         properties=properties,
         update_cell=update_cell,
     )
-
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
@@ -680,84 +701,73 @@ def run_sella_calculation(
 # -------------------------------------------------------------------------------------
 
 def run_irc_calculation(
-    atoms,
-    calc,
-    label='irc',
-    direction="forward",
-    directory='.',
-    save_trajs=False,
-    write_images=False,
-    update_cell=False,
-    logfile='-',
-    fmax=0.05,
-    max_steps=500,
-    min_steps=None,
-    max_forcecalls=None,
-    properties=["energy", "forces"],
-    kwargs_opt={},
-    **kwargs,
-):
-    """Run a sella calculation."""
+    atoms: Atoms,
+    calc: Calculator,
+    fmax: float = 0.05,
+    max_steps: int = 500,
+    min_steps: int = None,
+    logfile: str = "-",
+    label: str = "irc",
+    directory: str = ".",
+    trajectory: str = None,
+    save_trajs: bool = False,
+    write_images: bool = False,
+    update_cell: bool = False,
+    properties: list = ["energy", "forces"],
+    direction: str = "forward",
+    keep_going: bool = True,
+    kwargs_opt: dict = {},
+    max_forcecalls: int = None,
+    **kwargs: dict,
+) -> None:
+    """
+    Run a Sella IRC calculation.
+    """
     from sella import IRC, Constraints
-
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
         os.makedirs(directory, exist_ok=True)
-
     # Name of the trajectory file.
-    trajname = None
-    if save_trajs is True:
-        trajname = os.path.join(directory, f'{label}.traj')
-
+    if trajectory is None:
+        trajectory = os.path.join(directory, f"{label}.traj") if save_trajs else None
+    # Prepare a copy of atoms.
     atoms_opt = atoms.copy()
     atoms_opt.calc = calc
-    indices = get_indices_fixed(atoms_opt, return_mask=False)
-    
-    atoms_opt.constraints = []
-    constraints = Constraints(atoms_opt)
-    for ii in indices:
-        constraints.fix_translation(ii)
-    
+    # Set up the IRC optimizer.
     opt = IRC(
         atoms=atoms_opt,
-        constraints=constraints,
-        trajectory=trajname,
+        trajectory=trajectory,
         logfile=logfile,
+        keep_going=keep_going,
         **kwargs_opt,
     )
-    
     # Observer to set a minimum number of steps.
-    if min_steps:
+    if min_steps is not None:
         kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
         opt.attach(min_steps_obs, interval=1, **kwargs_obs)
-    
     # Observer to set a maximum of forces calls.
-    if max_forcecalls:
+    if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    
     # Calculate the number of calculator calls.
     if "counter" in dir(calc):
         calc.counter = 0
-    
     # Run the calculation.
     try:
-        opt.run(fmax=fmax, steps=max_steps, direction=direction)
-        converged = opt.converged()
+        fmax_start = fmax if min_steps is None else 0.
+        opt.run(fmax=fmax_start, steps=max_steps, direction=direction)
+        status = "finished" if has_converged(opt=opt) else "unfinished"
     except Exception as error:
         print(error)
-        converged = False
-    
+        status = "failed"
     # Update the input atoms with the results of the calculation.
-    atoms = update_atoms_from_atoms_opt(
+    update_atoms_from_atoms_opt(
         atoms=atoms,
         atoms_opt=atoms_opt,
-        converged=converged,
-        modified=False,
+        status=status,
         properties=properties,
         update_cell=update_cell,
     )
-
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
@@ -768,57 +778,46 @@ def run_irc_calculation(
 # -------------------------------------------------------------------------------------
 
 def run_vibrations_calculation(
-    atoms,
-    calc,
-    indices="adsorbate",
-    label="vibrations",
-    delta=0.01,
-    nfree=2,
-    directory=".",
-    remove_cache=False,
-    save_trajs=False,
-    properties=["energy", "forces"],
-    **kwargs,
-):
-    """Run a vibrations calculation."""
-    from ase.vibrations import Vibrations
-    
+    atoms: Atoms,
+    calc: Calculator,
+    label: str = "vibrations",
+    directory: str = ".",
+    save_trajs: bool = False,
+    properties: list = ["energy", "forces"],
+    indices: str = "adsorbate",
+    delta: float = 0.01,
+    nfree: int = 2,
+    remove_cache: bool = False,
+    **kwargs: dict,
+) -> None:
+    """
+    Run a vibrations calculation.
+    """
+    import shutil
+    from arkimede.workflow.vibrations import Vibrations
     # Get indices of atoms to vibrate.
     if indices == "adsorbate":
-        indices = get_indices_adsorbate(atoms)
+        indices = get_indices_adsorbate(atoms=atoms)
     elif indices == "not_fixed":
-        indices = get_indices_not_fixed(atoms)
-    
+        indices = get_indices_not_fixed(atoms=atoms)
     # Create directory to store the results.
     if save_trajs is True:
         os.makedirs(directory, exist_ok=True)
-
     # Initialize the vibrations calculation.
     atoms_vib = atoms.copy()
     atoms_vib.calc = calc
-    
-    class VibrationsWithEnergy(Vibrations):
-        def calculate(self, atoms, disp):
-            results = {}
-            results['energy'] = float(self.calc.get_potential_energy(atoms))
-            results['forces'] = self.calc.get_forces(atoms)
-            if self.ir:
-                results['dipole'] = self.calc.get_dipole_moment(atoms)
-            return results
-    
-    vib = VibrationsWithEnergy(
+    # Prepare vibrations calculation.
+    vib = Vibrations(
         atoms=atoms_vib,
         indices=indices,
         name=label,
         delta=delta,
         nfree=nfree,
     )
-    
     # Run the calculation and get normal frequencies.
     vib.clean(empty_files=True)
     vib.run()
     vib_energies = vib.get_energies()
-    
     # Get the atoms objects of the displacements.
     atoms_list = []
     for disp, atoms_vib in vib.iterdisplace(inplace=True):
@@ -827,19 +826,17 @@ def run_vibrations_calculation(
         atoms_vib.calc = SinglePointCalculator(atoms=atoms_vib, **results)
         atoms_vib.info["displacement"] = str(disp.name)
         atoms_list.append(atoms_vib)
-    
     # Write Trajectory files for each displacement.
     if save_trajs is True:
-        trajname = os.path.join(directory, f'{label}.traj')
-        with Trajectory(filename=trajname, mode='w') as traj:
+        trajname = os.path.join(directory, f"{label}.traj")
+        with Trajectory(filename=trajname, mode="w") as traj:
             for atoms_vib in atoms_list[1:]+atoms_list[0:1]:
                 traj.write(atoms_vib, **atoms_vib.calc.results)
-    
     # Remove the cache directory with the results of the calculation.
     if remove_cache is True:
         vib.clean()
-        os.rmdir(label)
-
+        shutil.rmtree(label)
+    # Store vibrational energies in atoms.
     atoms.info["vib_energies"] = vib_energies
 
 # -------------------------------------------------------------------------------------
@@ -847,16 +844,32 @@ def run_vibrations_calculation(
 # -------------------------------------------------------------------------------------
 
 def run_calculation(
-    atoms,
-    calc,
-    calculation,
-    **kwargs,
-):
-    """Run calculation."""
-    if calculation == "relax":
+    atoms: Atoms,
+    calc: Calculator,
+    calculation: str,
+    **kwargs: dict,
+) -> None:
+    """
+    Run calculation.
+    """
+    if calculation == "singlepoint":
+        # Single-point calculation.
+        run_singlepoint_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "relax":
         # Relax calculation.
         run_relax_calculation(
             atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "neb":
+        # NEB calculation.
+        run_neb_calculation(
+            images=atoms,
             calc=calc,
             **kwargs,
         )
@@ -867,9 +880,9 @@ def run_calculation(
             calc=calc,
             **kwargs,
         )
-    elif calculation == "climbbonds":
-        # Climbbonds calculaton.
-        run_climbbonds_calculation(
+    elif calculation == "climbtsbonds":
+        # ClimbTSbonds calculaton.
+        run_climbtsbonds_calculation(
             atoms=atoms,
             calc=calc,
             **kwargs,
@@ -886,6 +899,14 @@ def run_calculation(
         run_sella_calculation(
             atoms=atoms,
             calc=calc,
+            **kwargs,
+        )
+    elif calculation == "sella-ba":
+        # Sella calculaton.
+        run_sella_calculation(
+            atoms=atoms,
+            calc=calc,
+            modify_hessian=True,
             **kwargs,
         )
     elif calculation == "irc":

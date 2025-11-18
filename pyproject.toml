@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arkimede"
+version = "0.0.2"
+description = "Automatic reactions kinetic mechanism design."
+readme = "README.md"
+requires-python = ">=3.5, <4"
+license = { text = "GPL-3.0" }
+authors = [
+  { name = "Raffaele Cheula", email = "cheula.raffaele@gmail.com" }
+]
+urls = { "Source" = "https://github.com/raffaelecheula/arkimede.git" }
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["arkimede*"]
+exclude = ["examples*", "scripts*", "templates*"]
