@@ -40,10 +40,15 @@ class BFGSClimbFixInternals(BFGSClimbFixInternalsOriginal):
             self.optB_kwargs["trajectory"] = f"optB_{self.targetvalue}.traj"
         fmax = self.get_scaled_fmax()
         with self.optB(self.optimizable.atoms, **self.optB_kwargs) as opt:
-            opt.run(fmax, steps=self.optB_max_steps) # optimize with scaled fmax
-            grad = self.optimizable.get_gradient()
-            if self.converged(grad) and fmax > self.optB_fmax:
-                # (final) optimization with desired fmax
+            # Optimize with scaled fmax.
+            opt.run(fmax, steps=self.optB_max_steps)
+            # Check convergence.
+            if hasattr(self.optimizable, "get_gradient"):
+                converged = self.converged(gradient=self.optimizable.get_gradient())
+            else:
+                converged = self.converged()
+            # Final ptimization with desired fmax.
+            if converged and fmax > self.optB_fmax:
                 opt.run(self.optB_fmax)
 
 # -------------------------------------------------------------------------------------

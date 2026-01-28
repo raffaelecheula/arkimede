@@ -3,13 +3,15 @@
 # -------------------------------------------------------------------------------------
 
 import numpy as np
+from ase import Atoms
+from ase.calculators.calculator import Calculator
 
 # -------------------------------------------------------------------------------------
 # CHECK ATOMS NOT DESORBED
 # -------------------------------------------------------------------------------------
 
 def check_atoms_not_desorbed(
-    atoms: object,
+    atoms: Atoms,
     dist_ratio_thr: float = 1.40,
     **kwargs,
 ) -> bool:
@@ -33,10 +35,10 @@ def check_atoms_not_desorbed(
 # -------------------------------------------------------------------------------------
 
 def check_TS_relax_into_IS_and_FS(
-    atoms_TS: object,
-    atoms_IS: object,
-    atoms_FS: object,
-    calc: object,
+    atoms_TS: Atoms,
+    atoms_IS: Atoms,
+    atoms_FS: Atoms,
+    calc: Calculator,
     method: str = "vibrations",
     indices_check: list = "adsorbate",
     store_positions_relaxed: bool = False,

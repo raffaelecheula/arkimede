@@ -2,6 +2,7 @@
 # IMPORTS
 # -------------------------------------------------------------------------------------
 
+import os
 import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator
@@ -193,7 +194,8 @@ def get_mode_TS_from_vibrations(
     energies, modes = data.get_energies_and_modes(all_atoms=True)
     if clean_cache is True:
         vib.clean()
-        shutil.rmtree(label)
+        if os.path.isdir(label):
+            shutil.rmtree(label)
     # Return energies and modes.
     return modes[0]
 

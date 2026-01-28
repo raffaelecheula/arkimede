@@ -1,9 +1,8 @@
 # Custom
 *.db
-checkpoints/*
-examples/databases*
-examples/calculations*
-examples/finetuning*
+*.png
+experiments/
+slurm/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

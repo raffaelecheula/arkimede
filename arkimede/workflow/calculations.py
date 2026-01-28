@@ -38,10 +38,10 @@ def has_converged(
     """
     Check if a calculation has converged.
     """
-    try:
-        return opt.converged()
-    except:
+    if hasattr(opt.optimizable, "get_gradient"):
         return opt.converged(gradient=opt.optimizable.get_gradient())
+    else:
+        return opt.converged()
 
 # -------------------------------------------------------------------------------------
 # RUN SINGLE-POINT CALCULATION
@@ -100,6 +100,7 @@ def run_relax_calculation(
     optimizer: Optimizer = BFGS,
     kwargs_opt: dict = {},
     max_forcecalls: int = None,
+    reset_counter: bool = True,
     **kwargs: dict,
 ) -> None:
     """
@@ -129,8 +130,8 @@ def run_relax_calculation(
     if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    # Calculate the number of calculator calls.
-    if "counter" in dir(calc):
+    # Reset the number of calculator calls.
+    if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
     # Run the calculation.
     try:
@@ -181,6 +182,7 @@ def run_neb_calculation(
     converged_TS: bool = False,
     ftres_climb: float = 0.10,
     max_forcecalls: int = None,
+    reset_counter: bool = True,
     **kwargs: dict,
 ) -> None:
     """
@@ -237,8 +239,8 @@ def run_neb_calculation(
     if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    # Calculate the number of calculator calls.
-    if "counter" in dir(calc):
+    # Reset the number of calculator calls.
+    if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
     # Run the calculation (and restart NEBOptimizer when it fails randomly).
     converged = False
@@ -290,6 +292,7 @@ def run_dimer_calculation(
     max_force_tot: float = None,
     reset_eigenmode: bool = False,
     max_forcecalls: int = None,
+    reset_counter: bool = True,
     sign_bond_dict: dict = {"break": +1, "form": -1},
     **kwargs: dict,
 ) -> None:
@@ -314,26 +317,22 @@ def run_dimer_calculation(
     if mode_TS is None:
         mode_TS = atoms.info.get("mode_TS").copy()
     # Dimer parameters.
-    kwargs_dimer_opt = {
+    kwargs_dimer = {
         "initial_eigenmode_method": "displacement",
         "displacement_method": "vector",
         "logfile": None,
-        "cg_translation": True,
-        "use_central_forces": True,
-        "extrapolate_forces": False,
-        "order": 1,
-        "f_rot_min": 0.10,
-        "f_rot_max": 1.00,
+        "trial_trans_step": 0.06,
+        "dimer_separation": 0.02,
+        **kwargs_dimer,
     }
-    kwargs_dimer_opt.update(kwargs_dimer)
     # Set up the dimer atoms.
-    dimer_control = DimerControl(**kwargs_dimer_opt)
+    dimer_control = DimerControl(**kwargs_dimer)
     atoms_opt = MinModeAtoms(
         atoms=atoms,
         control=dimer_control,
         mask=mask,
     )
-    mode_TS *= kwargs_dimer_opt.get("maximum_translation", 0.1)/np.linalg.norm(mode_TS)
+    mode_TS *= kwargs_dimer.get("maximum_translation", 0.1) / np.linalg.norm(mode_TS)
     atoms_opt.displace(displacement_vector=mode_TS, mask=mask)
     # Set up the dimer optimizer.
     opt = MinModeTranslate(
@@ -369,8 +368,8 @@ def run_dimer_calculation(
     if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    # Calculate the number of calculator calls.
-    if "counter" in dir(calc):
+    # Reset the number of calculator calls.
+    if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
     # Run the calculation.
     try:
@@ -421,6 +420,7 @@ def run_climbtsbonds_calculation(
     max_force_tot: float = None,
     atoms_too_close: bool = False,
     max_forcecalls: int = None,
+    reset_counter: bool = True,
     **kwargs: dict,
 ) -> None:
     """
@@ -471,8 +471,8 @@ def run_climbtsbonds_calculation(
     if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    # Calculate the number of calculator calls.
-    if "counter" in dir(calc):
+    # Reset the number of calculator calls.
+    if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
     # Run the calculation.
     failed = 0
@@ -526,6 +526,7 @@ def run_climbfixint_calculation(
     max_displacement: float = None,
     max_force_tot: float = None,
     max_forcecalls: int = None,
+    reset_counter: bool = True,
     **kwargs: dict,
 ) -> None:
     """
@@ -552,14 +553,13 @@ def run_climbfixint_calculation(
         FixInternals(bondcombos=bondcombos, mic=mic, epsilon=epsilon)
     ]
     # Optimizer for ClimbFixInternal.
-    optB_kwargs_opt = {"logfile": "-", "trajectory": "atoms.traj"}
-    optB_kwargs_opt.update(optB_kwargs)
+    optB_kwargs = {"logfile": "-", "trajectory": trajectory, **optB_kwargs}
     opt = BFGSClimbFixInternals(
         atoms=atoms_opt,
         logfile=logfile,
         trajectory=trajectory,
         climb_coordinate=climb_coordinate,
-        optB_kwargs=optB_kwargs_opt,
+        optB_kwargs=optB_kwargs,
         optB_max_steps=optB_max_steps,
         max_force_tot=max_force_tot,
         **kwargs_opt,
@@ -580,8 +580,8 @@ def run_climbfixint_calculation(
     if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    # Calculate the number of calculator calls.
-    if "counter" in dir(calc):
+    # Reset the number of calculator calls.
+    if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
     # Run the calculation.
     try:
@@ -627,12 +627,18 @@ def run_sella_calculation(
     modify_hessian: bool = False,
     max_force_tot: float = None,
     max_forcecalls: int = None,
+    reset_counter: bool = True,
     sign_bond_dict: dict = {"break": +1, "form": -1},
     **kwargs: dict,
 ) -> None:
     """
     Run a Sella TS-search calculation.
     """
+    import warnings
+    import logging
+    warnings.filterwarnings("ignore", message=".*TPU.*")
+    warnings.filterwarnings("ignore", message=".*CUDA.*")
+    logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
     from sella import Sella, Constraints
     from arkimede.workflow.sella import modify_hessian_obs
     # Get TS bonds from info dictionary.
@@ -670,8 +676,8 @@ def run_sella_calculation(
     if max_force_tot is not None:
         kwargs_obs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
         opt.attach(function=max_force_tot_obs, interval=10, **kwargs_obs)
-    # Calculate the number of calculator calls.
-    if "counter" in dir(calc):
+    # Reset the number of calculator calls.
+    if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
     fmax_start = fmax if min_steps is None else 0.
     opt.run(fmax=fmax_start, steps=max_steps)
@@ -718,11 +724,17 @@ def run_irc_calculation(
     keep_going: bool = True,
     kwargs_opt: dict = {},
     max_forcecalls: int = None,
+    reset_counter: bool = True,
     **kwargs: dict,
 ) -> None:
     """
     Run a Sella IRC calculation.
     """
+    import warnings
+    import logging
+    warnings.filterwarnings("ignore", message=".*TPU.*")
+    warnings.filterwarnings("ignore", message=".*CUDA.*")
+    logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
     from sella import IRC, Constraints
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
@@ -749,8 +761,8 @@ def run_irc_calculation(
     if max_forcecalls is not None:
         kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
         opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
-    # Calculate the number of calculator calls.
-    if "counter" in dir(calc):
+    # Reset the number of calculator calls.
+    if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
     # Run the calculation.
     try:
@@ -835,7 +847,8 @@ def run_vibrations_calculation(
     # Remove the cache directory with the results of the calculation.
     if remove_cache is True:
         vib.clean()
-        shutil.rmtree(label)
+        if os.path.isdir(label):
+            shutil.rmtree(label)
     # Store vibrational energies in atoms.
     atoms.info["vib_energies"] = vib_energies
 

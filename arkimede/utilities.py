@@ -2,7 +2,9 @@
 # IMPORTS
 # -------------------------------------------------------------------------------------
 
+from ase import Atoms
 import numpy as np
+from copy import deepcopy
 from ase.calculators.singlepoint import SinglePointCalculator, all_properties
 
 # -------------------------------------------------------------------------------------
@@ -10,13 +12,14 @@ from ase.calculators.singlepoint import SinglePointCalculator, all_properties
 # -------------------------------------------------------------------------------------
 
 def get_indices_fixed(
-    atoms: object,
+    atoms: Atoms,
     return_mask: bool = False,
 ):
     """
     Get indices of atoms with FixAtoms constraints.
     """
     from ase.constraints import FixAtoms
+    # Get indices.
     indices = []
     for constraint in atoms.constraints:
         if isinstance(constraint, FixAtoms):
@@ -32,12 +35,13 @@ def get_indices_fixed(
 # -------------------------------------------------------------------------------------
 
 def get_indices_not_fixed(
-    atoms: object,
+    atoms: Atoms,
     return_mask: bool = False,
 ):
     """
     Get indices of atoms without FixAtoms constraints.
     """
+    # Get indices.
     indices = [ii for ii in range(len(atoms)) if ii not in get_indices_fixed(atoms)]
     # Return indices or mask.
     if return_mask:
@@ -50,12 +54,13 @@ def get_indices_not_fixed(
 # -------------------------------------------------------------------------------------
 
 def get_indices_adsorbate(
-    atoms: object,
+    atoms: Atoms,
     return_mask: bool = False,
 ):
     """
     Get indices of atoms adsorbate.
     """
+    # Get indices.
     if "indices_ads" in atoms.info:
         indices = atoms.info["indices_ads"]
     else:
@@ -74,6 +79,10 @@ def filter_results(
     results: dict,
     properties: list = all_properties,
 ):
+    """
+    Filter results to only properties managed by ASE.
+    """
+    # Return filtered results.
     return {pp: results[pp] for pp in results if pp in properties}
 
 # -------------------------------------------------------------------------------------
@@ -81,23 +90,27 @@ def filter_results(
 # -------------------------------------------------------------------------------------
 
 def filter_constraints(
-    atoms: object,
+    atoms: Atoms,
 ):
     """
-    Filter constraints to be stored into an ase database.
+    Filter constraints to only constraints managed by ASE.
     """
     from ase.constraints import __all__
+    # Remove non-ASE constraints.
     for ii, constraint in reversed(list(enumerate(atoms.constraints))):
         if constraint.todict()["name"] not in __all__:
             del atoms.constraints[ii]
+    # Reset atoms in calculator.
+    if atoms.calc is not None:
+        atoms.calc.atoms = atoms
 
 # -------------------------------------------------------------------------------------
 # UPDATE ATOMS FROM ATOMS OPT
 # -------------------------------------------------------------------------------------
 
 def update_atoms_from_atoms_opt(
-    atoms: object,
-    atoms_opt: object,
+    atoms: Atoms,
+    atoms_opt: Atoms,
     status: str,
     properties: list = all_properties,
     update_cell: bool = False,
@@ -105,11 +118,15 @@ def update_atoms_from_atoms_opt(
     """
     Update the input atoms with the results of the optimized atoms.
     """
+    # Update positions.
     atoms.set_positions(atoms_opt.get_positions())
+    # Update cell.
     if update_cell is True:
         atoms.set_cell(atoms_opt.get_cell())
+    # Update calculator results.
     results = filter_results(results=atoms_opt.calc.results, properties=properties)
     atoms.calc = SinglePointCalculator(atoms=atoms, **results)
+    # Update info.
     atoms.info.update(atoms_opt.info)
     atoms.info["status"] = status
     if "counter" in dir(atoms_opt.calc):
@@ -118,11 +135,41 @@ def update_atoms_from_atoms_opt(
     return atoms
 
 # -------------------------------------------------------------------------------------
+# COPY ATOMS AND RESULTS
+# -------------------------------------------------------------------------------------
+
+def copy_atoms_and_results(
+    atoms: Atoms,
+    new_calc: bool = True,
+    properties: list = all_properties,
+):
+    """
+    Copy an ase Atoms object along with its calculator results.
+    """
+    # Copy atoms.
+    atoms_copy = atoms.copy()
+    # Set calculator.
+    if new_calc is True:
+        atoms_copy.calc = SinglePointCalculator(atoms=atoms_copy)
+    else:
+        atoms_copy.calc = deepcopy(atoms.calc)
+    # Filter results.
+    atoms_copy.calc.results = filter_results(
+        results=atoms.calc.results,
+        properties=properties,
+    )
+    # Filter constraints.
+    filter_constraints(atoms=atoms_copy)
+    atoms_copy.calc.atoms = atoms_copy
+    # Return atoms copy.
+    return atoms_copy
+
+# -------------------------------------------------------------------------------------
 # GET EDGES LIST
 # -------------------------------------------------------------------------------------
 
 def get_edges_list(
-    atoms: object,
+    atoms: Atoms,
     indices: list = None,
     dist_ratio_thr: float = 1.25,
 ):
@@ -131,9 +178,11 @@ def get_edges_list(
     """
     from itertools import combinations
     from ase.neighborlist import natural_cutoffs
+    # Get indices.
     if indices is None:
         indices = range(len(atoms))
     indices = [int(ii) for ii in indices]
+    # Get edges list.
     edges_list = []
     cutoffs = natural_cutoffs(atoms=atoms)
     for combo in combinations(list(indices), 2):
@@ -147,11 +196,11 @@ def get_edges_list(
     return edges_list
 
 # -------------------------------------------------------------------------------------
-# GET CONNECTVITY
+# GET CONNECTIVITY
 # -------------------------------------------------------------------------------------
 
 def get_connectivity(
-    atoms: object,
+    atoms: Atoms,
     edges_list: list = None,
     indices: list = None,
     dist_ratio_thr: float = 1.25,
@@ -159,12 +208,14 @@ def get_connectivity(
     """
     Get the connectivity matrix for selected atoms in an ase Atoms object.
     """
+    # Get edges list.
     if edges_list is None:
         edges_list = get_edges_list(
             atoms=atoms,
             indices=indices,
             dist_ratio_thr=dist_ratio_thr,
         )
+    # Populate connectivity matrix.
     matrix = np.zeros((len(atoms), len(atoms)))
     for aa, bb in edges_list:
         matrix[aa, bb] += 1
@@ -177,19 +228,22 @@ def get_connectivity(
 # -------------------------------------------------------------------------------------
 
 def check_same_connectivity(
-    atoms_1: object,
-    atoms_2: object,
+    atoms_1: Atoms,
+    atoms_2: Atoms,
     indices: list = None,
 ):
     """
     Check if two structures have the same connectivity.
     """
+    # Get indices.
     if indices == "adsorbate":
         indices = get_indices_adsorbate(atoms=atoms_1)
     elif indices == "not_fixed":
         indices = get_indices_not_fixed(atoms=atoms_1)
+    # Get connectivity matrices.
     connectivity_1 = get_connectivity(atoms=atoms_1, indices=indices)
     connectivity_2 = get_connectivity(atoms=atoms_2, indices=indices)
+    # Return comparison.
     return bool((connectivity_1 == connectivity_2).all())
 
 # -------------------------------------------------------------------------------------

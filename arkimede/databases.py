@@ -17,10 +17,11 @@ def write_atoms_to_db(
     db_ase: Database,
     keys_store: list = [],
     keys_match: list = None,
-    deepcopy_all: bool = False,
+    deepcopy_all: bool = True,
     fill_stress: bool = False,
     fill_magmom: bool = False,
     no_constraints: bool = False,
+    match_kwargs: bool = False,
     **kwargs: dict,
 ):
     """
@@ -41,13 +42,14 @@ def write_atoms_to_db(
         atoms.constraints = []
         atoms.calc.atoms = atoms
     # Get dictionary to store atoms.info into the columns of the db.
-    kwargs_store = {key: atoms.info[key] for key in keys_store}
+    kwargs_store = {key: atoms.info[key] for key in keys_store} if keys_store else {}
     kwargs_store.update(**kwargs)
     # Get dictionary to check if structure is already in db.
-    if keys_match is not None:
-        kwargs_match = {key: atoms.info[key] for key in keys_match}
+    kwargs_match = {key: atoms.info[key] for key in keys_match} if keys_match else {}
+    if match_kwargs is True:
+        kwargs_match.update(**kwargs)
     # Write structure to db.
-    if keys_match is None or db_ase.count(**kwargs_match) == 0:
+    if not kwargs_match or db_ase.count(**kwargs_match) == 0:
         db_ase.write(atoms=atoms, data=atoms.info, **kwargs_store)
     elif db_ase.count(**kwargs_match) == 1:
         row_id = db_ase.get(**kwargs_match).id
@@ -64,30 +66,35 @@ def write_atoms_list_to_db(
     db_ase: Database,
     keys_store: list = [],
     keys_match: list = None,
-    deepcopy_all: bool = False,
+    deepcopy_all: bool = True,
     fill_stress: bool = False,
     fill_magmom: bool = False,
     no_constraints: bool = False,
+    match_kwargs: bool = False,
     use_tqdm: bool = True,
     **kwargs: dict,
 ):
     """
     Write list of ase Atoms to ase database.
     """
+    # Monitor progress with tqdm.
     if use_tqdm is True:
         atoms_list = tqdm(atoms_list, desc="Writing atoms to ASE DB", ncols=120)
-    for atoms in atoms_list:
-        write_atoms_to_db(
-            atoms=atoms,
-            db_ase=db_ase,
-            keys_store=keys_store,
-            keys_match=keys_match,
-            deepcopy_all=deepcopy_all,
-            fill_stress=fill_stress,
-            fill_magmom=fill_magmom,
-            no_constraints=no_constraints,
-            **kwargs,
-        )
+    # Write all atoms structures in a single transaction.
+    with db_ase:
+        for atoms in atoms_list:
+            write_atoms_to_db(
+                atoms=atoms,
+                db_ase=db_ase,
+                keys_store=keys_store,
+                keys_match=keys_match,
+                deepcopy_all=deepcopy_all,
+                fill_stress=fill_stress,
+                fill_magmom=fill_magmom,
+                no_constraints=no_constraints,
+                match_kwargs=match_kwargs,
+                **kwargs,
+            )
 
 # -------------------------------------------------------------------------------------
 # GET ATOMS LIST FROM DB
@@ -139,16 +146,19 @@ def get_atoms_from_db(
 def get_names_from_db(
     db_ase: Database,
     selection: str = "",
+    unique: bool = True,
     **kwargs,
 ) -> Atoms:
     """
     Get names of structures in database.
     """
-    names = {
-        row.key_value_pairs["name"]: None
+    names = [
+        row.key_value_pairs["name"]
         for row in db_ase.select(selection=selection, **kwargs, include_data=False)
-    }
-    return list(names.keys())
+    ]
+    if unique is True:
+        names = list({key: None for key in names}.keys())
+    return names
 
 # -------------------------------------------------------------------------------------
 # END

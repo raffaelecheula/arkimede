@@ -1,0 +1,20 @@
+input_data:
+  calculation: scf
+  restart_mode: from_scratch
+  outdir: calc
+  max_seconds: 100000
+  ecutwfc: 40.0
+  ecutrho: 320.0
+  tprnfor: true
+  tstress: true
+  occupations: smearing
+  degauss: 0.001
+  smearing: mv
+  input_dft: BEEF
+  electron_maxstep: 1000
+  conv_thr: 1.0e-06
+  mixing_mode: local-TF
+  mixing_beta: 0.5
+  diagonalization: david
+  diago_david_ndim: 2
+kpts: [6, 6, 1]
