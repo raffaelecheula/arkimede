@@ -28,7 +28,7 @@ def main():
     calc_DFT_kwargs = {"basedir": os.getcwd(), "clean_directory": True}
     # Databases parameters.
     db_inp_name = f"../databases/MLP_relax_{calc_MLP_name}.db"
-    db_out_name = f"../databases/Act_paral_{calc_MLP_name}.db"
+    db_out_name = f"../databases/AL_groups_{calc_MLP_name}.db"
     db_inp_kwargs = {"calculation": calculation, "neb_steps": 0, "status": "finished"}
     db_out_kwargs = {"calculation": calculation, "image": "TS"}
 
@@ -71,38 +71,51 @@ def main():
     name_list = get_names_from_db(db_ase=db_inp, **db_inp_kwargs)
     print(f"Number of calculations:", len(name_list))
 
+    # Group names by surface.
+    surface_dict = {}
+    for name in name_list:
+        surface = name.split("_")[0]
+        if surface not in surface_dict:
+            surface_dict[surface] = []
+        surface_dict[surface].append(name)
+    
     # Prepare output database.
     db_out = connect(name=db_out_name, use_lock_file=True, append=True)
 
     # Run calculations.
     experiment_list = []
-    # Set up experiment.
-    exp_kwargs = {
-        "name_list": name_list,
-        "db_inp_name": db_inp_name,
-        "db_out_name": db_out_name,
-        "calculation": calculation,
-        "calc_MLP_name": calc_MLP_name,
-        "calc_DFT_name": calc_DFT_name,
-        "calc_MLP_kwargs": calc_MLP_kwargs,
-        "calc_DFT_kwargs": calc_DFT_kwargs,
-        "run_MLP_kwargs": run_MLP_kwargs,
-        "run_DFT_kwargs": run_DFT_kwargs,
-        "finetune_kwargs": finetune_kwargs,
-        "db_inp_kwargs": db_inp_kwargs,
-        "db_out_kwargs": db_out_kwargs,
-        "basedir": os.getcwd(),
-    }
-    # Set up experiment.
-    if use_shephex is True:
-        # Set up experiment for parallel runs.
-        experiment_list.append(
-            hexperiment()(run_active_learning_list_from_names)(**exp_kwargs)
-        )
-    else:
-        # Run experiment in serial.
-        run_active_learning_list_from_names(**exp_kwargs)
-    
+    for surface, name_list in surface_dict.items():
+        # Skip experiments if final results in output db.
+        db_kwargs = {**db_out_kwargs, "name": name_list[0]}
+        if get_atoms_from_db(db_ase=db_out, none_ok=True, **db_kwargs) is not None:
+            continue
+        # Set up experiment.
+        exp_kwargs = {
+            "name_list": name_list,
+            "db_inp_name": db_inp_name,
+            "db_out_name": db_out_name,
+            "calculation": calculation,
+            "calc_MLP_name": calc_MLP_name,
+            "calc_DFT_name": calc_DFT_name,
+            "calc_MLP_kwargs": calc_MLP_kwargs,
+            "calc_DFT_kwargs": calc_DFT_kwargs,
+            "run_MLP_kwargs": run_MLP_kwargs,
+            "run_DFT_kwargs": run_DFT_kwargs,
+            "finetune_kwargs": finetune_kwargs,
+            "db_inp_kwargs": db_inp_kwargs,
+            "db_out_kwargs": db_out_kwargs,
+            "basedir": os.getcwd(),
+        }
+        # Set up experiment.
+        if use_shephex is True:
+            # Set up experiment for parallel runs.
+            experiment_list.append(
+                hexperiment()(run_active_learning_list_from_names)(**exp_kwargs)
+            )
+        else:
+            # Run experiment in serial.
+            run_active_learning_list_from_names(**exp_kwargs)
+
     # Submit experiments.
     if use_shephex is True:
         print(f"Number of calculations submitted:", len(experiment_list))
