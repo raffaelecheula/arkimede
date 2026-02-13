@@ -41,7 +41,7 @@ def main():
         "cpus-per-task" : 1,
         "gpus-per-node" : 1,
         "mem": "377G",
-        "time": "48:00:00",
+        "time": "72:00:00",
     }
 
     # MLP calculation parameters.

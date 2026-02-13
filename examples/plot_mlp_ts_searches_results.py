@@ -22,6 +22,7 @@ def main():
     # Parameters.
     calc_name = "OCP_eSEN" # OCP_eSCN | OCP_eSEN
     db_name = f"databases/MLP_relax_{calc_name}.db"
+    percentages = True
     
     # Lists of calculation and status names.
     calculation_list = ["dimer", "climbfixint", "sella", "sella-ba"]
@@ -40,19 +41,19 @@ def main():
         db_ase=db_ase,
         max_steps=10000 + 10,
         not_in_status_list="failed",
-        percentages=True,
+        percentages=percentages,
         print_report=True,
         excluded=excluded,
     )
     # Plot success curves.
     plot_success_curves(
         success_steps_dict=success_steps_dict,
-        xlabel="MLP single-point calculations [-]",
+        xlabel="Number of MLP single-points [-]",
         ylabel="Successful TS-search calculations [%]",
         filename="plot_success_curves.png",
         xmed=1100,
         xmax=10000,
-        ymax=100,
+        ymax=100 if percentages is True else None,
     )
     # Plot status data.
     plot_status_data(
@@ -60,7 +61,7 @@ def main():
         results_dict=results_dict,
         xlabel="Methods",
         ylabel="TS-search calculations [%]",
-        ymax=100,
+        ymax=100 if percentages is True else None,
     )
 
 # -------------------------------------------------------------------------------------

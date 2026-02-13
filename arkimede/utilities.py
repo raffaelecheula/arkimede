@@ -72,6 +72,35 @@ def get_indices_adsorbate(
         return indices
 
 # -------------------------------------------------------------------------------------
+# GET INDICES FROM NAME
+# -------------------------------------------------------------------------------------
+
+def get_indices_from_name(
+    atoms: Atoms,
+    indices: list,
+    return_mask: bool = False,
+):
+    """
+    Get indices from name.
+    """
+    # Get indices.
+    if indices == "all":
+        indices = list(range(len(atoms)))
+    elif indices == "fixed":
+        indices = get_indices_fixed(atoms=atoms, return_mask=False)
+    elif indices == "not-fixed":
+        indices = get_indices_not_fixed(atoms=atoms, return_mask=False)
+    elif indices == "adsorbate":
+        indices = get_indices_adsorbate(atoms=atoms, return_mask=False)
+    elif isinstance(indices, str):
+        raise ValueError(f"Invalid indices name: {indices}")
+    # Return indices or mask.
+    if return_mask:
+        return [True if ii in indices else False for ii in range(len(atoms))]
+    else:
+        return [int(ii) for ii in indices]
+
+# -------------------------------------------------------------------------------------
 # FILTER RESULTS
 # -------------------------------------------------------------------------------------
 
@@ -245,6 +274,52 @@ def check_same_connectivity(
     connectivity_2 = get_connectivity(atoms=atoms_2, indices=indices)
     # Return comparison.
     return bool((connectivity_1 == connectivity_2).all())
+
+# -------------------------------------------------------------------------------------
+# GET KEY PATHS
+# -------------------------------------------------------------------------------------
+
+def get_key_paths(
+    dictionary: dict,
+    parents: list = None,
+):
+    """
+    Return a list of lists containing the key paths of a nested dictionary.
+    """
+    if parents is None:
+        parents = []
+    key_paths = []
+    values = []
+    for key, value in dictionary.items():
+        path = parents + [key]
+        if isinstance(value, dict):
+            sub_paths, sub_values = get_key_paths(dictionary=value, parents=path)
+            key_paths.extend(sub_paths)
+            values.extend(sub_values)
+        else:
+            key_paths.append(path)
+            values.append(value)
+    # Return key paths.
+    return key_paths, values
+
+# -------------------------------------------------------------------------------------
+# SET KEY PATH VALUE
+# -------------------------------------------------------------------------------------
+
+def set_key_path_value(
+    dictionary: dict,
+    path: list,
+    value: any,
+):
+    """
+    Set the value of a key path in a nested dictionary.
+    """
+    sub_dict = dictionary
+    for key in path[:-1]:
+        if key not in sub_dict:
+            sub_dict[key] = {}
+        sub_dict = sub_dict[key]
+    sub_dict[path[-1]] = value
 
 # -------------------------------------------------------------------------------------
 # PRINT TITLE

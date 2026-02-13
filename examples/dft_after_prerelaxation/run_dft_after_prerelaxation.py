@@ -37,7 +37,7 @@ def main():
         "ntasks-per-node": 32,
         "cpus-per-task" : 1,
         "mem": "251G",
-        "time": "08:00:00",
+        "time": "24:00:00",
     }
     
     # TS-search parameters.

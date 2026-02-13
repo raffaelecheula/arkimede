@@ -3,6 +3,7 @@
 # -------------------------------------------------------------------------------------
 
 import os
+import uuid
 import numpy as np
 from ase import Atoms
 from ase.calculators.calculator import Calculator
@@ -169,7 +170,7 @@ def get_mode_TS_from_vibrations(
     calc: Calculator,
     delta: float = 0.01,
     indices: list = "not_fixed",
-    label: str = "vib",
+    label: str = "vib-uuid",
     clean_cache: bool = True,
     **kwargs,
 ) -> np.ndarray:
@@ -186,6 +187,9 @@ def get_mode_TS_from_vibrations(
         indices = get_indices_adsorbate(atoms=atoms)
     elif indices == "not_fixed":
         indices = get_indices_not_fixed(atoms=atoms)
+    # Label with uuid to avoid conflicts.
+    if label == "vib-uuid":
+        label = f"vib-{uuid.uuid4().hex}"
     # Run vibrations calculations.
     vib = Vibrations(atoms=atoms_copy, indices=indices, delta=delta, name=label)
     vib.clean()

@@ -23,7 +23,7 @@ def get_names_dict(
         "relax": "Relax",
         "neb": "NEB",
         "dimer": "Dimer",
-        "climbfixint": "ClimbFixInt",
+        "climbfixint": "ARPESS",
         "sella": "Sella",
         "sella-ba": "BA-Sella",
         **names_dict,
@@ -40,20 +40,12 @@ def get_colors_dict(
     Get calculation colors dictionary updating the default one.
     """
     return {
-        # Calculations.
         "relax": "mediumblue",
-        "neb": "purple",
+        "neb": "mediumorchid",
         "dimer": "deepskyblue",
         "climbfixint": "crimson",
         "sella": "orange",
         "sella-ba": "forestgreen",
-        # Status.
-        "finished": "mediumseagreen",
-        "unfinished": "sienna",
-        "failed": "mediumorchid",
-        "desorbed": "royalblue",
-        "wrong": "darkorange",
-        # Custom.
         **colors_dict,
     }
 
@@ -118,6 +110,7 @@ def plot_success_curves(
     axes: object = None,
     xlabel: str = "Number of steps [-]",
     ylabel: str = "Successful calculations [%]",
+    title: str = None,
     xmed: int = 1100,
     xmax: int = 10000,
     ymax: float = 100,
@@ -131,8 +124,8 @@ def plot_success_curves(
     """
     # Prepare figure.
     if axes is None:
-        kwargs_fig = {"dpi": 300, "gridspec_kw": {"width_ratios": (14, 1)}}
-        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(5, 4), **kwargs_fig)
+        fig_kwargs = {"dpi": 300, "gridspec_kw": {"width_ratios": (14, 1)}}
+        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(5.5, 4), **fig_kwargs)
         fig.subplots_adjust(left=0.15, right=0.95, bottom=0.15, top=0.95, wspace=0.03)
     else:
         ax1, ax2 = axes
@@ -165,6 +158,8 @@ def plot_success_curves(
     # Set axes labels and legend.
     ax1.set_xlabel(" " * 10 + xlabel)
     ax1.set_ylabel(ylabel)
+    if title is not None:
+        ax1.set_title(title)
     ax2.legend(
         loc="lower right",
         frameon=True,
@@ -186,6 +181,7 @@ def plot_status_data(
     ax: object = None,
     xlabel: str = "Methods",
     ylabel: str = "Calculations [-]",
+    title: str = None,
     ymax: float = 100,
     filename: str = "plot_status_data.png",
     colors_dict: dict = {},
@@ -201,26 +197,56 @@ def plot_status_data(
     # Update default names and colors dictionaries.
     names_dict = get_names_dict(names_dict=names_dict)
     colors_dict = get_colors_dict(colors_dict=colors_dict)
+    # Define hatch patterns for different statuses.
+    hatch_dict = {
+        "finished": "",
+        "unfinished": "---",
+        "failed": "////",
+        "desorbed": "|||",
+        "wrong": "ooo",
+    }
     # Plot status data.
     bottom = np.zeros(len(calculation_list))
     status_list = list({key: None for dd in results_dict.values() for key in dd})
     for status in status_list:
-        values = [results_dict[cc][status] for cc in calculation_list]
+        xx = [names_dict[calculation] for calculation in calculation_list]
+        hh = [results_dict[calculation][status] for calculation in calculation_list]
+        cc = [colors_dict[calculation] for calculation in calculation_list]
         plt.bar(
-            x=[names_dict[cc] for cc in calculation_list],
-            height=values,
+            x=xx,
+            height=hh,
             bottom=bottom,
-            label=status,
-            color=colors_dict[status],
+            color=cc if status == "finished" else "white",
+            edgecolor=cc,
+            hatch=hatch_dict[status],
         )
-        bottom += values
+        plt.bar(
+            x=xx,
+            height=hh,
+            bottom=bottom,
+            color="none",
+            edgecolor="black",
+        )
+        plt.bar(
+            x=-1,
+            height=0,
+            label=status,
+            color="darkgrey" if status == "finished" else "white",
+            edgecolor="black",
+            hatch=hatch_dict[status],
+        )
+        bottom += hh
     # Set axes labels and y limit.
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    ax.set_xlim(-0.5, len(calculation_list)-0.5)
     ax.set_ylim(0, ymax)
+    # Set title.
+    if title is not None:
+        ax.set_title(title)
     # Add legend.
     ax.legend(
-        loc="lower left",
+        loc="lower right",
         frameon=True,
         edgecolor="black",
         framealpha=1.0,
@@ -297,8 +323,8 @@ def plot_steps_distribution(
     alpha_fill: float = 0.7,
     ylabel: str = "Number of DFT single-points [-]",
     filename: str = "plot_actlearn_steps.png",
-    kwargs_violin: dict = {"points": 300},
-    kwargs_scatter: dict = {"s": 20},
+    violin_kwargs: dict = {"points": 300},
+    scatter_kwargs: dict = {"s": 20},
 ) -> object:
     """
     Plot the steps distribution.
@@ -310,8 +336,8 @@ def plot_steps_distribution(
     # Plot half violins.
     dataset = [list(ii) for ii in steps_dict.values()]
     positions = range(len(dataset))
-    kwargs_violin = {"showmeans": False, "showextrema": False, **kwargs_violin}
-    parts = ax.violinplot(dataset=dataset, positions=positions, **kwargs_violin)
+    violin_kwargs = {"showmeans": False, "showextrema": False, **violin_kwargs}
+    parts = ax.violinplot(dataset=dataset, positions=positions, **violin_kwargs)
     # Customize violins.
     for pc in parts["bodies"]:
         pc.set_facecolor(color)
@@ -319,8 +345,8 @@ def plot_steps_distribution(
         pc.set_alpha(alpha_fill)
     # Plot mean values.
     mean_values = [np.mean(ii) for ii in dataset]
-    kwargs_scatter = {"color": "black", "facecolors": "none", **kwargs_scatter}
-    ax.scatter(x=positions, y=mean_values, **kwargs_scatter)
+    scatter_kwargs = {"color": "black", "facecolors": "none", **scatter_kwargs}
+    ax.scatter(x=positions, y=mean_values, **scatter_kwargs)
     # Set y max.
     y_max = y_max if y_max else max([ii for jj in dataset for ii in jj]) * 1.10
     ax.set_ylim(0, y_max)

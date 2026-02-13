@@ -30,7 +30,7 @@ def run_scantsbonds_calculation(
     atoms_too_close: bool = False,
     max_forcecalls: int = None,
     optimizer: Optimizer = BFGS,
-    kwargs_opt: dict = {"maxstep": 0.01},
+    opt_kwargs: dict = {"maxstep": 0.01},
     properties: list = ["energy", "forces"],
     **kwargs: dict,
 ):

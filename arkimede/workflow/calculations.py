@@ -3,6 +3,8 @@
 # -------------------------------------------------------------------------------------
 
 import os
+import uuid
+import inspect
 import numpy as np
 from copy import deepcopy
 from ase import Atoms
@@ -38,10 +40,34 @@ def has_converged(
     """
     Check if a calculation has converged.
     """
-    if hasattr(opt.optimizable, "get_gradient"):
+    if "gradient" in inspect.signature(opt.converged).parameters:
         return opt.converged(gradient=opt.optimizable.get_gradient())
     else:
         return opt.converged()
+
+# -------------------------------------------------------------------------------------
+# RUN OPTIMIZATION
+# -------------------------------------------------------------------------------------
+
+def run_optimization(
+    opt: Optimizer,
+    fmax: float = 0.05,
+    max_steps: int = 300,
+    min_steps: int = None,
+    run_kwargs: dict = {},
+):
+    """
+    Run optimization.
+    """
+    try:
+        fmax_start = fmax if min_steps is None else 0.
+        opt.run(fmax=fmax_start, steps=max_steps, **run_kwargs)
+        status = "finished" if has_converged(opt=opt) else "unfinished"
+    except Exception as error:
+        print(error)
+        status = "failed"
+    # Return status.
+    return status
 
 # -------------------------------------------------------------------------------------
 # RUN SINGLE-POINT CALCULATION
@@ -98,7 +124,7 @@ def run_relax_calculation(
     update_cell: bool = False,
     properties: list = ["energy", "forces"],
     optimizer: Optimizer = BFGS,
-    kwargs_opt: dict = {},
+    opt_kwargs: dict = {},
     max_forcecalls: int = None,
     reset_counter: bool = True,
     **kwargs: dict,
@@ -120,27 +146,26 @@ def run_relax_calculation(
         atoms=atoms_opt,
         logfile=logfile,
         trajectory=trajectory,
-        **kwargs_opt,
+        **opt_kwargs,
     )
     # Observer to set a minimum number of steps.
     if min_steps is not None:
-        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
-        opt.attach(min_steps_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
+        opt.attach(min_steps_obs, interval=1, **obs_kwargs)
     # Observer to set a maximum of forces calls.
     if max_forcecalls is not None:
-        kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
-        opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
+        opt.attach(max_forcecalls_obs, interval=1, **obs_kwargs)
     # Reset the number of calculator calls.
     if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
-    # Run the calculation.
-    try:
-        fmax_start = fmax if min_steps is None else 0.
-        opt.run(fmax=fmax_start, steps=max_steps)
-        status = "finished" if has_converged(opt=opt) else "unfinished"
-    except Exception as error:
-        print(error)
-        status = "failed"
+    # Run the optimization.
+    status = run_optimization(
+        opt=opt,
+        fmax=fmax,
+        max_steps=max_steps,
+        min_steps=min_steps,
+    )
     # Update the input atoms with the results of the calculation.
     update_atoms_from_atoms_opt(
         atoms=atoms,
@@ -171,12 +196,12 @@ def run_neb_calculation(
     save_trajs: bool = False,
     write_images: bool = False,
     optimizer: Optimizer = BFGS,
-    kwargs_opt: dict = {},
+    opt_kwargs: dict = {},
     k_neb: float = 1.00,
     climb: bool = False,
     parallel: bool = False,
     allow_shared_calculator: bool = True,
-    kwargs_neb: dict = {"method": "aseneb"},
+    neb_kwargs: dict = {},
     activate_climb: bool = True,
     print_energies: bool = False,
     converged_TS: bool = False,
@@ -207,7 +232,7 @@ def run_neb_calculation(
         climb=climb,
         parallel=parallel,
         allow_shared_calculator=allow_shared_calculator,
-        **kwargs_neb,
+        **neb_kwargs,
     )
     # Set calculator to images.
     for ii in range(len(images)):
@@ -218,27 +243,27 @@ def run_neb_calculation(
         results = filter_results(results=images[ii].calc.results)
         images[ii].calc = SinglePointCalculator(atoms=images[ii], **results)
     # Set up the optimizer.
-    opt = optimizer(neb, logfile=logfile, **kwargs_opt)
+    opt = optimizer(neb, logfile=logfile, **opt_kwargs)
     # Observer for activating the climbing image.
     if activate_climb is True:
-        kwargs_obs = {"neb": neb, "ftres": ftres_climb}
-        opt.attach(activate_climb_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"neb": neb, "ftres": ftres_climb}
+        opt.attach(activate_climb_obs, interval=1, **obs_kwargs)
     # Observer to print the energies of the path images.
     if print_energies is True:
-        kwargs_obs = {"neb": neb, "opt": opt, "print_path_energies": True}
-        opt.attach(print_energies_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"neb": neb, "opt": opt, "print_path_energies": True}
+        opt.attach(print_energies_obs, interval=1, **obs_kwargs)
     # Observer that stops the calculation if the TS forces are below the threshold.
     if converged_TS is True:
-        kwargs_obs = {"neb": neb, "opt": opt, "fmax": fmax}
-        opt.attach(converged_TS_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"neb": neb, "opt": opt, "fmax": fmax}
+        opt.attach(converged_TS_obs, interval=1, **obs_kwargs)
     # Observer to set a minimum number of steps.
     if min_steps is not None:
-        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
-        opt.attach(min_steps_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
+        opt.attach(min_steps_obs, interval=1, **obs_kwargs)
     # Observer to set a maximum of forces calls.
     if max_forcecalls is not None:
-        kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
-        opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
+        opt.attach(max_forcecalls_obs, interval=1, **obs_kwargs)
     # Reset the number of calculator calls.
     if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
@@ -287,13 +312,12 @@ def run_dimer_calculation(
     properties: list = ["energy", "forces"],
     bonds_TS: list = None,
     mode_TS: np.ndarray = None,
-    kwargs_dimer: dict = {},
-    max_displacement: float = None,
-    max_force_tot: float = None,
+    control_kwargs: dict = {},
+    max_displ: float = None,
+    max_force_tot: float = 100.,
     reset_eigenmode: bool = False,
     max_forcecalls: int = None,
     reset_counter: bool = True,
-    sign_bond_dict: dict = {"break": +1, "form": -1},
     **kwargs: dict,
 ) -> None:
     """
@@ -316,23 +340,23 @@ def run_dimer_calculation(
     mask = get_indices_not_fixed(atoms, return_mask=True)
     if mode_TS is None:
         mode_TS = atoms.info.get("mode_TS").copy()
-    # Dimer parameters.
-    kwargs_dimer = {
+    # Dimer control parameters.
+    control_kwargs = {
         "initial_eigenmode_method": "displacement",
         "displacement_method": "vector",
         "logfile": None,
         "trial_trans_step": 0.06,
         "dimer_separation": 0.02,
-        **kwargs_dimer,
+        **control_kwargs,
     }
     # Set up the dimer atoms.
-    dimer_control = DimerControl(**kwargs_dimer)
+    dimer_control = DimerControl(**control_kwargs)
     atoms_opt = MinModeAtoms(
         atoms=atoms,
         control=dimer_control,
         mask=mask,
     )
-    mode_TS *= kwargs_dimer.get("maximum_translation", 0.1) / np.linalg.norm(mode_TS)
+    mode_TS *= control_kwargs.get("maximum_translation", 0.1) / np.linalg.norm(mode_TS)
     atoms_opt.displace(displacement_vector=mode_TS, mask=mask)
     # Set up the dimer optimizer.
     opt = MinModeTranslate(
@@ -340,45 +364,36 @@ def run_dimer_calculation(
         trajectory=trajectory,
         logfile=logfile,
     )
-    # Observer that reset the eigenmode to the direction of the ts bonds.
+    # Observer that reset the eigenmode to the direction of the TS bonds.
     if bonds_TS and reset_eigenmode is True:
-        kwargs_obs = {
-            "atoms": atoms_opt,
-            "bonds_TS": bonds_TS,
-            "sign_bond_dict": sign_bond_dict,
-        }
-        opt.attach(reset_eigenmode_obs, interval=1, **kwargs_obs)
-    # Observer that checks the displacement of the ts from the starting position.
-    if max_displacement is not None:
-        kwargs_obs = {
-            "atoms_new": atoms_opt,
-            "atoms_old": atoms,
-            "max_displacement": max_displacement,
-        }
-        opt.attach(function=max_displacement_obs, interval=10, **kwargs_obs)
+        obs_kwargs = {"atoms": atoms_opt, "bonds_TS": bonds_TS}
+        opt.attach(reset_eigenmode_obs, interval=1, **obs_kwargs)
+    # Observer that checks the displacement of the TS from the starting position.
+    if max_displ is not None:
+        obs_kwargs = {"atoms": atoms_opt, "atoms_zero": atoms, "max_displ": max_displ}
+        opt.attach(function=max_displacement_obs, interval=10, **obs_kwargs)
     # Observer to stop the calculation if the maximum force is too high.
     if max_force_tot is not None:
-        kwargs_obs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
-        opt.attach(function=max_force_tot_obs, interval=10, **kwargs_obs)
+        obs_kwargs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
+        opt.attach(function=max_force_tot_obs, interval=10, **obs_kwargs)
     # Observer to set a minimum number of steps.
     if min_steps is not None:
-        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
-        opt.attach(min_steps_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
+        opt.attach(min_steps_obs, interval=1, **obs_kwargs)
     # Observer to set a maximum of forces calls.
     if max_forcecalls is not None:
-        kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
-        opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
+        opt.attach(max_forcecalls_obs, interval=1, **obs_kwargs)
     # Reset the number of calculator calls.
     if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
-    # Run the calculation.
-    try:
-        fmax_start = fmax if min_steps is None else 0.
-        opt.run(fmax=fmax_start, steps=max_steps)
-        status = "finished" if has_converged(opt=opt) else "unfinished"
-    except Exception as error:
-        print(error)
-        status = "failed"
+    # Run the optimization.
+    status = run_optimization(
+        opt=opt,
+        fmax=fmax,
+        max_steps=max_steps,
+        min_steps=min_steps,
+    )
     # Update the input atoms with the results of the calculation.
     update_atoms_from_atoms_opt(
         atoms=atoms,
@@ -414,9 +429,9 @@ def run_climbtsbonds_calculation(
     update_cell: bool = False,
     properties: list = ["energy", "forces"],
     optimizer: Optimizer = BFGS,
-    kwargs_opt: dict = {"maxstep": 0.01},
+    opt_kwargs: dict = {"maxstep": 0.01},
     bonds_TS: list = None,
-    max_displacement: float = None,
+    max_displ: float = None,
     max_force_tot: float = None,
     atoms_too_close: bool = False,
     max_forcecalls: int = None,
@@ -445,32 +460,28 @@ def run_climbtsbonds_calculation(
         atoms=atoms_opt,
         logfile=logfile,
         trajectory=trajectory,
-        **kwargs_opt,
+        **opt_kwargs,
     )
-    # Observer that checks the displacement of the ts from the starting position.
-    if max_displacement is not None:
-        kwargs_obs = {
-            "atoms_new": atoms_opt,
-            "atoms_old": atoms,
-            "max_displacement": max_displacement,
-        }
-        opt.attach(function=max_displacement_obs, interval=10, **kwargs_obs)
+    # Observer that checks the displacement of the TS from the starting position.
+    if max_displ is not None:
+        obs_kwargs = {"atoms": atoms_opt, "atoms_zero": atoms, "max_displ": max_displ}
+        opt.attach(function=max_displacement_obs, interval=10, **obs_kwargs)
     # Observer to stop the calculation if the maximum force is too high.
     if max_force_tot is not None:
-        kwargs_obs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
-        opt.attach(function=max_force_tot_obs, interval=10, **kwargs_obs)
+        obs_kwargs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
+        opt.attach(function=max_force_tot_obs, interval=10, **obs_kwargs)
     # Observer to stop the calculation if two atoms are too close to each other.
     if atoms_too_close is True:
-        kwargs_obs = {"atoms": atoms_opt}
-        opt.attach(function=atoms_too_close_obs, interval=10, **kwargs_obs)
+        obs_kwargs = {"atoms": atoms_opt}
+        opt.attach(function=atoms_too_close_obs, interval=10, **obs_kwargs)
     # Observer to set a minimum number of steps.
     if min_steps is not None:
-        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
-        opt.attach(min_steps_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
+        opt.attach(min_steps_obs, interval=1, **obs_kwargs)
     # Observer to set a maximum of forces calls.
     if max_forcecalls is not None:
-        kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
-        opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
+        opt.attach(max_forcecalls_obs, interval=1, **obs_kwargs)
     # Reset the number of calculator calls.
     if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
@@ -520,11 +531,11 @@ def run_climbfixint_calculation(
     bonds_TS: list = None,
     mic: bool = True,
     epsilon: float = 1e-7,
-    kwargs_opt: dict = {"maxstep": 0.05},
-    optB_kwargs: dict = {"maxstep": 0.05},
+    opt_kwargs: dict = {},
+    optB_kwargs: dict = {},
     optB_max_steps: int = 200,
-    max_displacement: float = None,
-    max_force_tot: float = None,
+    max_displ: float = None,
+    max_force_tot: float = 100.,
     max_forcecalls: int = None,
     reset_counter: bool = True,
     **kwargs: dict,
@@ -547,50 +558,55 @@ def run_climbfixint_calculation(
     atoms_opt = atoms.copy()
     atoms_opt.calc = calc
     # Set up the ClimbFixInternal calculation.
-    climb_coordinate = [bond[:2]+[1.0] for bond in bonds_TS]
+    climb_coordinate = [bond[:2] + [1.0] for bond in bonds_TS]
     bondcombos = [[None, climb_coordinate]]
     atoms_opt.constraints += [
         FixInternals(bondcombos=bondcombos, mic=mic, epsilon=epsilon)
     ]
-    # Optimizer for ClimbFixInternal.
-    optB_kwargs = {"logfile": "-", "trajectory": trajectory, **optB_kwargs}
+    # Default parameters.
+    opt_kwargs = {
+        "maxstep": 0.05,
+        "logfile": logfile,
+        "trajectory": trajectory,
+        **opt_kwargs,
+    }
+    optB_kwargs = {
+        "maxstep": 0.05,
+        "logfile": "-",
+        "trajectory": trajectory,
+        **optB_kwargs,
+    }
+    # Prepare ClimbFixInternal BFGS optimizer.
     opt = BFGSClimbFixInternals(
         atoms=atoms_opt,
-        logfile=logfile,
-        trajectory=trajectory,
         climb_coordinate=climb_coordinate,
         optB_kwargs=optB_kwargs,
         optB_max_steps=optB_max_steps,
         max_force_tot=max_force_tot,
-        **kwargs_opt,
+        **opt_kwargs,
     )
-    # Observer that checks the displacement of the ts from the starting position.
-    if max_displacement is not None:
-        kwargs_obs = {
-            "atoms_new": atoms_opt,
-            "atoms_old": atoms,
-            "max_displacement": max_displacement,
-        }
-        opt.attach(function=max_displacement_obs, interval=10, **kwargs_obs)
+    # Observer that checks the displacement of the TS from the starting position.
+    if max_displ is not None:
+        obs_kwargs = {"atoms": atoms_opt, "atoms_zero": atoms, "max_displ": max_displ}
+        opt.attach(function=max_displacement_obs, interval=10, **obs_kwargs)
     # Observer to set a minimum number of steps.
     if min_steps is not None:
-        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
-        opt.attach(min_steps_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
+        opt.attach(min_steps_obs, interval=1, **obs_kwargs)
     # Observer to set a maximum of forces calls.
     if max_forcecalls is not None:
-        kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
-        opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
+        opt.attach(max_forcecalls_obs, interval=1, **obs_kwargs)
     # Reset the number of calculator calls.
     if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
-    # Run the calculation.
-    try:
-        fmax_start = fmax if min_steps is None else 0.
-        opt.run(fmax=fmax_start, steps=max_steps)
-        status = "finished" if has_converged(opt=opt) else "unfinished"
-    except Exception as error:
-        print(error)
-        status = "failed"
+    # Run the optimization.
+    status = run_optimization(
+        opt=opt,
+        fmax=fmax,
+        max_steps=max_steps,
+        min_steps=min_steps,
+    )
     # Update the input atoms with the results of the calculation.
     update_atoms_from_atoms_opt(
         atoms=atoms,
@@ -622,13 +638,14 @@ def run_sella_calculation(
     write_images: bool = False,
     update_cell: bool = False,
     properties: list = ["energy", "forces"],
-    kwargs_opt: dict = {"eta": 0.01},
+    opt_kwargs: dict = {},
     bonds_TS: list = None,
+    dot_prod_thr: float = 0.50,
     modify_hessian: bool = False,
+    max_displ: float = None,
     max_force_tot: float = None,
     max_forcecalls: int = None,
     reset_counter: bool = True,
-    sign_bond_dict: dict = {"break": +1, "form": -1},
     **kwargs: dict,
 ) -> None:
     """
@@ -639,7 +656,7 @@ def run_sella_calculation(
     warnings.filterwarnings("ignore", message=".*TPU.*")
     warnings.filterwarnings("ignore", message=".*CUDA.*")
     logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
-    from sella import Sella, Constraints
+    from sella import Sella
     from arkimede.workflow.sella import modify_hessian_obs
     # Get TS bonds from info dictionary.
     if bonds_TS is None:
@@ -653,42 +670,51 @@ def run_sella_calculation(
     # Prepare a copy of atoms.
     atoms_opt = atoms.copy()
     atoms_opt.calc = calc
-    # Set up the Sella optimizer.
+    # Default parameters.
+    opt_kwargs = {
+        "eta": 0.01,
+        "gamma": 0.05,
+        "delta0": 0.05,
+        "nsteps_per_diag": 1,
+        **opt_kwargs,
+    }
+    # Prepare Sella optimizer.
     opt = Sella(
         atoms=atoms_opt,
         trajectory=trajectory,
         logfile=logfile,
-        **kwargs_opt,
+        **opt_kwargs,
     )
     # Observer that modifies the hessian adding curvature to TS bonds.
     if modify_hessian is True:
-        kwargs_obs = {"opt": opt, "bonds_TS": bonds_TS}
-        opt.attach(modify_hessian_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "bonds_TS": bonds_TS, "dot_prod_thr": dot_prod_thr}
+        opt.attach(modify_hessian_obs, interval=1, **obs_kwargs)
+    # Observer that checks the displacement of the TS from the starting position.
+    if max_displ is not None:
+        obs_kwargs = {"atoms": atoms_opt, "atoms_zero": atoms, "max_displ": max_displ}
+        opt.attach(function=max_displacement_obs, interval=10, **obs_kwargs)
     # Observer to set a minimum number of steps.
     if min_steps is not None:
-        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
-        opt.attach(min_steps_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
+        opt.attach(min_steps_obs, interval=1, **obs_kwargs)
     # Observer to set a maximum of forces calls.
     if max_forcecalls is not None:
-        kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
-        opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
+        opt.attach(max_forcecalls_obs, interval=1, **obs_kwargs)
     # Observer to stop the calculation if the maximum force is too high.
     if max_force_tot is not None:
-        kwargs_obs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
-        opt.attach(function=max_force_tot_obs, interval=10, **kwargs_obs)
+        obs_kwargs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
+        opt.attach(function=max_force_tot_obs, interval=10, **obs_kwargs)
     # Reset the number of calculator calls.
     if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
-    fmax_start = fmax if min_steps is None else 0.
-    opt.run(fmax=fmax_start, steps=max_steps)
-    # Run the calculation.
-    try:
-        fmax_start = fmax if min_steps is None else 0.
-        opt.run(fmax=fmax_start, steps=max_steps)
-        status = "finished" if has_converged(opt=opt) else "unfinished"
-    except Exception as error:
-        print(error)
-        status = "failed"
+    # Run the optimization.
+    status = run_optimization(
+        opt=opt,
+        fmax=fmax,
+        max_steps=max_steps,
+        min_steps=min_steps,
+    )
     # Update the input atoms with the results of the calculation.
     update_atoms_from_atoms_opt(
         atoms=atoms,
@@ -722,7 +748,7 @@ def run_irc_calculation(
     properties: list = ["energy", "forces"],
     direction: str = "forward",
     keep_going: bool = True,
-    kwargs_opt: dict = {},
+    opt_kwargs: dict = {},
     max_forcecalls: int = None,
     reset_counter: bool = True,
     **kwargs: dict,
@@ -735,7 +761,7 @@ def run_irc_calculation(
     warnings.filterwarnings("ignore", message=".*TPU.*")
     warnings.filterwarnings("ignore", message=".*CUDA.*")
     logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
-    from sella import IRC, Constraints
+    from sella import IRC
     # Create directory to store the results.
     if save_trajs is True or write_images is True:
         os.makedirs(directory, exist_ok=True)
@@ -751,27 +777,27 @@ def run_irc_calculation(
         trajectory=trajectory,
         logfile=logfile,
         keep_going=keep_going,
-        **kwargs_opt,
+        **opt_kwargs,
     )
     # Observer to set a minimum number of steps.
     if min_steps is not None:
-        kwargs_obs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
-        opt.attach(min_steps_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
+        opt.attach(min_steps_obs, interval=1, **obs_kwargs)
     # Observer to set a maximum of forces calls.
     if max_forcecalls is not None:
-        kwargs_obs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
-        opt.attach(max_forcecalls_obs, interval=1, **kwargs_obs)
+        obs_kwargs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
+        opt.attach(max_forcecalls_obs, interval=1, **obs_kwargs)
     # Reset the number of calculator calls.
     if "counter" in dir(calc) and reset_counter is True:
         calc.counter = 0
-    # Run the calculation.
-    try:
-        fmax_start = fmax if min_steps is None else 0.
-        opt.run(fmax=fmax_start, steps=max_steps, direction=direction)
-        status = "finished" if has_converged(opt=opt) else "unfinished"
-    except Exception as error:
-        print(error)
-        status = "failed"
+    # Run the optimization.
+    status = run_optimization(
+        opt=opt,
+        fmax=fmax,
+        max_steps=max_steps,
+        min_steps=min_steps,
+        run_kwargs={"direction": direction},
+    )
     # Update the input atoms with the results of the calculation.
     update_atoms_from_atoms_opt(
         atoms=atoms,
@@ -792,7 +818,7 @@ def run_irc_calculation(
 def run_vibrations_calculation(
     atoms: Atoms,
     calc: Calculator,
-    label: str = "vibrations",
+    label: str = "vib-uuid",
     directory: str = ".",
     save_trajs: bool = False,
     properties: list = ["energy", "forces"],
@@ -812,6 +838,9 @@ def run_vibrations_calculation(
         indices = get_indices_adsorbate(atoms=atoms)
     elif indices == "not_fixed":
         indices = get_indices_not_fixed(atoms=atoms)
+    # Label with uuid to avoid conflicts.
+    if label == "vib-uuid":
+        label = f"vib-{uuid.uuid4().hex}"
     # Create directory to store the results.
     if save_trajs is True:
         os.makedirs(directory, exist_ok=True)
@@ -842,7 +871,7 @@ def run_vibrations_calculation(
     if save_trajs is True:
         trajname = os.path.join(directory, f"{label}.traj")
         with Trajectory(filename=trajname, mode="w") as traj:
-            for atoms_vib in atoms_list[1:]+atoms_list[0:1]:
+            for atoms_vib in atoms_list[1:] + atoms_list[0:1]:
                 traj.write(atoms_vib, **atoms_vib.calc.results)
     # Remove the cache directory with the results of the calculation.
     if remove_cache is True:

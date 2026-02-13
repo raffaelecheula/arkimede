@@ -46,7 +46,7 @@ def max_forcecalls_obs(
 def reset_eigenmode_obs(
     atoms: Atoms,
     bonds_TS: list,
-    sign_bond_dict: dict,
+    sign_bond_dict: dict = {"break": +1, "form": -1},
 ):
     """
     Observer resetting the eigenmode of a dimer calculation.
@@ -64,15 +64,15 @@ def reset_eigenmode_obs(
 # -------------------------------------------------------------------------------------
 
 def max_displacement_obs(
-    atoms_new: Atoms,
-    atoms_old: Atoms,
-    max_displacement: float,
+    atoms: Atoms,
+    atoms_zero: Atoms,
+    max_displ: float,
 ):
     """
     Observer stopping the calculation when the atoms are too distant from the start.
     """
-    displ = np.linalg.norm(atoms_new.positions-atoms_old.positions)
-    if displ > max_displacement:
+    displ = np.linalg.norm(atoms.positions - atoms_zero.positions)
+    if displ > max_displ:
         raise RuntimeError("atoms displaced too much")
 
 # -------------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ def atoms_too_close_obs(
     Observer stopping the calculation when two atoms are too close to each other.
     """
     for ii, position in enumerate(atoms.positions):
-        distances = np.linalg.norm(atoms.positions[ii+1:]-position, axis=1)
+        distances = np.linalg.norm(atoms.positions[ii+1:] - position, axis=1)
         duplicates = np.where(distances < mindist)[0]
         if len(duplicates) > 0:
             raise RuntimeError("atoms too close")

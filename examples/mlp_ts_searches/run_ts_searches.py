@@ -20,7 +20,7 @@ def main():
     calculation_TS = "sella" # neb | dimer | climbfixint | sella | sella-ba
     neb_steps = 0
     # MLP calculator parameters.
-    calc_MLP_name = "OCP_eSCN" # OCP_eSCN | OCP_eSEN #TODO:
+    calc_MLP_name = "OCP_eSEN" # OCP_eSCN | OCP_eSEN
     calc_MLP_kwargs = {"logfile": "log.txt"}
     # Databases parameters.
     db_inp_name = f"../databases/SAA_DFT_reactions.db"
@@ -57,7 +57,6 @@ def main():
         "fmax": 0.05, # [eV/Å]
         "max_steps": 1000,
         "max_forcecalls": 10000,
-        "max_force_tot": 50.,
         "db_out_kwargs": db_out_kwargs,
     }
     # IS and FS check parameters.

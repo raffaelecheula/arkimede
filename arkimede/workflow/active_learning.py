@@ -31,7 +31,7 @@ def run_active_learning(
     finetune_fun: callable,
     finetune_kwargs: dict = {},
     directory: str = "finetuning",
-    max_steps_actlearn: int = 100,
+    max_steps_actlearn: int = 300,
     run_MLP_kwargs: dict = {},
     run_DFT_kwargs: dict = {},
     train_on_all: bool = False,
@@ -70,7 +70,7 @@ def run_active_learning(
     time_DFT = 0.
     time_train = 0.
     atoms_train = []
-    for ii in range(max_steps_actlearn):
+    for ii in range(max_steps_actlearn + 1):
         # Run MLP calculation.
         print_title(f"MLP {calculation} calculation.")
         time_MLP_start = timeit.default_timer()
@@ -102,7 +102,13 @@ def run_active_learning(
         # Check DFT max force.
         max_force = np.linalg.norm(atoms.get_forces(), axis=1).max()
         print(f"DFT fmax    = {max_force:+7.4f} [eV/Å]")
+        # Stop if the calculation has converged.
         if max_force < fmax_DFT:
+            atoms.info["status"] = "finished"
+            break
+        # Stop if the maximum number of steps is reached.
+        if ii == max_steps_actlearn:
+            atoms.info["status"] = "unfinished"
             break
         forces_DFT = atoms.get_forces(apply_constraint=False).copy()
         # Set DFT energy equal to MLP energy.
@@ -208,7 +214,7 @@ def run_active_learning_list(
     energy_dict_MLP = {}
     forces_dict_DFT = {}
     indices_active = list(range(len(atoms_list)))
-    for ii in range(max_steps_actlearn):
+    for ii in range(max_steps_actlearn + 1):
         # Run MLP calculation.
         print_title(f"MLP {calculation} calculations.")
         time_MLP_start = timeit.default_timer()
@@ -258,6 +264,7 @@ def run_active_learning_list(
             # Remove index of converged calculations.
             if max_force < fmax_DFT:
                 indices_active.remove(jj)
+                atoms_list[jj].info["status"] = "finished"
                 atoms_list[jj].info["DFT_steps"] = ii + 1
             else:
                 # Add to training set.
@@ -269,6 +276,12 @@ def run_active_learning_list(
         time_DFT += timeit.default_timer() - time_DFT_start
         # Stop if all calculations have converged.
         if len(indices_active) == 0:
+            break
+        # Stop if the maximum number of steps is reached.
+        if ii == max_steps_actlearn:
+            for jj in indices_active:
+                atoms_list[jj].info["status"] = "unfinished"
+                atoms_list[jj].info["DFT_steps"] = ii + 1
             break
         # Run MLP model fine-tuning.
         print_title("MLP fine-tuning.")

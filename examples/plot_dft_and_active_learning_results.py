@@ -23,8 +23,14 @@ def main():
     db_DFT_relax_name = f"databases/DFT_relax.db"
     db_DFT_after_name = f"databases/DFT_after_{calc_MLP_name}.db"
     db_AL_serial_name = f"databases/AL_serial_{calc_MLP_name}.db"
-    db_AL_parall_name = f"databases/AL_parall_{calc_MLP_name}.db"
+    db_AL_groups_name = f"databases/AL_groups_{calc_MLP_name}.db"
     db_MLP_relax_name = f"databases/MLP_relax_{calc_MLP_name}.db"
+
+    # Labels.
+    label_DFT_relax = "Pure DFT\nRelaxation"
+    label_DFT_after = "DFT after MLP\nPre-relaxation"
+    label_serial_AL = "Sequential\nActive Learning"
+    label_groups_AL = "Batch\nActive Learning"
 
     # Read pure DFT results.
     print_title("Pure DFT")
@@ -50,7 +56,7 @@ def main():
     print(f"Mean number of steps: {np.mean(steps_DFT_after):5.1f}")
 
     # Read active learning results.
-    print_title("Active Learning (serial)")
+    print_title("Sequential Active Learning")
     db_AL_serial = connect(name=db_AL_serial_name)
     atoms_list = get_atoms_list_from_db(db_ase=db_AL_serial)
     #atoms_list = [atoms for atoms in atoms_list if atoms.info["DFT_steps"] < 10]
@@ -71,18 +77,31 @@ def main():
     time_train /= len(atoms_list) # [min]
     print(f"Mean number of steps: {np.mean(steps_actlearn):5.1f}")
 
+    # Read active learning results.
+    print_title("Batch Active Learning")
+    db_AL_groups = connect(name=db_AL_groups_name)
+    atoms_list = get_atoms_list_from_db(db_ase=db_AL_groups)
+    #atoms_list = [atoms for atoms in atoms_list if atoms.info["DFT_steps"] < 10]
+    print(f"Number of structures: {len(atoms_list):5d}")
+    # Get number of DFT steps.
+    steps_DFT_groups = []
+    for atoms in atoms_list:
+        steps_DFT_groups.append(atoms.info["counter"])
+    steps_DFT_groups = [aa / 8 for aa in steps_DFT_groups] # TODO:
+    print(f"Mean number of steps: {np.mean(steps_DFT_groups):5.1f}")
+
     steps_dict = {
-        "Pure DFT": steps_pure_DFT,
-        "DFT after MLP": steps_DFT_after,
-        "Active learning\n(serial)": steps_actlearn,
-        "Active learning\n(parallel)": np.array(steps_actlearn) * 3,
+        label_DFT_relax: steps_pure_DFT,
+        label_DFT_after: steps_DFT_after,
+        label_serial_AL: steps_actlearn,
+        label_groups_AL: steps_DFT_groups,
     }
 
     times_dict = {
-        "Pure DFT": [0, time_DFT_per_step * np.mean(steps_pure_DFT), 0],
-        "DFT after MLP": [0.8, time_DFT_per_step * np.mean(steps_DFT_after), 0],
-        "Active learning\n(serial)": [2.1, time_DFT, time_train],
-        #"Active learning\n(parallel)": []
+        label_DFT_relax: [0, time_DFT_per_step * np.mean(steps_pure_DFT), 0],
+        label_DFT_after: [0.8, time_DFT_per_step * np.mean(steps_DFT_after), 0],
+        label_serial_AL: [2.1, time_DFT, time_train],
+        #label_groups_AL: []
     }
 
     # Steps calculation times.
@@ -91,11 +110,13 @@ def main():
 
     # Steps distribution plot.
     y_max = 300
-    kwargs_violin = {"points": 300, "bw_method": 0.2}
+    violin_kwargs = {"points": 300, "bw_method": 0.2}
     plot_steps_distribution(
         steps_dict=steps_dict,
-        kwargs_violin=kwargs_violin,
+        violin_kwargs=violin_kwargs,
         y_max=y_max,
+        color="salmon",
+        alpha_fill=1.0,
     )
 
 # -------------------------------------------------------------------------------------

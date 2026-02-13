@@ -12,6 +12,7 @@ from ase.optimize.optimize import Optimizer
 
 def hessian_from_vibrations(
     atoms: Atoms,
+    delta: float = 0.01,
 ):
     """
     Function to calculate the hessian matrix from finite elements.
@@ -25,7 +26,7 @@ def hessian_from_vibrations(
     masses = atoms.get_masses()
     atoms.set_masses([1. for aa in atoms])
     # Run vibrations calculation.
-    vib = Vibrations(atoms=atoms, indices=indices, delta=0.01)
+    vib = Vibrations(atoms=atoms, indices=indices, delta=delta)
     vib.clean()
     vib.run()
     data = vib.get_vibrations()
@@ -92,16 +93,20 @@ def hessian_from_bonds_TS(
     return hessian
 
 # -------------------------------------------------------------------------------------
-# MODIFY HESSIAN
+# MODIFY HESSIAN OBS
 # -------------------------------------------------------------------------------------
 
 def modify_hessian_obs(
     opt: Optimizer,
     bonds_TS: list,
     delta: float = 0.1,
-    dot_min: float = 0.5,
+    dot_prod_thr: float = 0.5,
     sign_bond_dict: dict = {"break": +1, "form": -1},
 ):
+    """
+    Observer that modifies the hessian matrix and set negative curvature in
+    corrispondance of the TS bonds.
+    """
     # Get Hessian.
     hessian = opt.pes.H.B
     if hessian is None or bonds_TS is None:
@@ -120,7 +125,7 @@ def modify_hessian_obs(
     # Get eigenvector.    
     evec = np.linalg.eigh(hessian)[1][:, 0]
     dot_prod = np.abs(np.dot(evec, vector))
-    while dot_prod < dot_min:
+    while dot_prod < dot_prod_thr:
         hessian = hessian - delta * np.outer(vector, vector)
         evec = np.linalg.eigh(hessian)[1][:, 0]
         dot_prod = np.abs(np.dot(evec, vector))
