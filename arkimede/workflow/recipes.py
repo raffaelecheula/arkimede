@@ -10,15 +10,6 @@ from ase.calculators.calculator import Calculator
 from ase.db.core import Database
 
 from arkimede.databases import get_atoms_from_db, write_atoms_to_db
-from arkimede.workflow.calculations import run_calculation
-from arkimede.workflow.checks import (
-    check_atoms_not_desorbed,
-    check_TS_relax_into_IS_and_FS,
-)
-from arkimede.transtates import (
-    get_idpp_interpolated_images,
-    get_atoms_TS_from_images_neb,
-)
 from arkimede.utilities import (
     print_title,
     print_subtitle,
@@ -26,7 +17,100 @@ from arkimede.utilities import (
     get_key_paths,
     set_key_path_value,
 )
-from mlps_finetuning.calculators import get_calculator
+
+# -------------------------------------------------------------------------------------
+# RUN CALCULATION
+# -------------------------------------------------------------------------------------
+
+def run_calculation(
+    atoms: Atoms,
+    calc: Calculator,
+    calculation: str,
+    **kwargs: dict,
+) -> None:
+    """
+    Run calculation.
+    """
+    if calculation == "singlepoint":
+        from arkimede.workflow.calculations import run_singlepoint_calculation
+        # Single-point calculation.
+        run_singlepoint_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "relax":
+        from arkimede.workflow.calculations import run_relax_calculation
+        # Relax calculation.
+        run_relax_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "neb":
+        from arkimede.workflow.calculations import run_neb_calculation
+        # NEB calculation.
+        run_neb_calculation(
+            images=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "dimer":
+        from arkimede.workflow.calculations import run_dimer_calculation
+        # Dimer calculation.
+        run_dimer_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "climbfixint":
+        from arkimede.workflow.calculations import run_climbfixint_calculation
+        # ClimbFixInternals calculaton.
+        run_climbfixint_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "sella":
+        from arkimede.workflow.calculations import run_sella_calculation
+        # Sella calculaton.
+        run_sella_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "sella-ba":
+        from arkimede.workflow.calculations import run_sella_calculation
+        # Sella calculaton.
+        run_sella_calculation(
+            atoms=atoms,
+            calc=calc,
+            modify_hessian=True,
+            **kwargs,
+        )
+    elif calculation == "irc":
+        from arkimede.workflow.calculations import run_irc_calculation
+        # IRC calculaton.
+        run_irc_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "vibrations":
+        from arkimede.workflow.calculations import run_vibrations_calculation
+        # Vibrations calculaton.
+        run_vibrations_calculation(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
+    elif calculation == "search-ts-and-check":
+        # TS-search and check calculaton.
+        run_TSsearch_and_check(
+            atoms=atoms,
+            calc=calc,
+            **kwargs,
+        )
 
 # -------------------------------------------------------------------------------------
 # SEARCH TS FROM ATOMS IS AND FS
@@ -49,6 +133,10 @@ def search_TS_from_atoms_IS_and_FS(
     """
     Run TS-search calculation from IS and FS atoms.
     """
+    from arkimede.workflow.transition_states import (
+        get_idpp_interpolated_images,
+        get_atoms_TS_from_images_neb,
+    )
     # Get and print name.
     name = atoms_IS.info["name"]
     print_title(name)
@@ -152,6 +240,10 @@ def run_TSsearch_and_check(
     """
     Run TS-search calculation and check results.
     """
+    from arkimede.workflow.checks import (
+        check_atoms_not_desorbed,
+        check_TS_relax_into_IS_and_FS,
+    )
     # Run TS-search calculation.
     number_generator = None
     atoms_TS_zero = atoms_TS.copy()
@@ -207,8 +299,8 @@ def rattle_atoms_and_parameters(
     parameters: dict,
     calculation_TS: str,
     indices: list = "adsorbate",
-    scale_transl: float = 0.5,
-    scale_rattle: float = 0.2,
+    scale_transl: float = 0.25,
+    scale_rattle: float = 0.15,
     parameters_ranges: dict = None,
     number_generator: object = None,
     sampling: str = "quasirandom",
@@ -230,6 +322,7 @@ def rattle_atoms_and_parameters(
     number_generator = rattle_parameters(
         parameters=parameters,
         parameters_ranges=parameters_ranges,
+        sampling=sampling,
         number_generator=number_generator,
     )
     # Return number generator.
@@ -319,6 +412,49 @@ def default_parameters_ranges(
         }
 
 # -------------------------------------------------------------------------------------
+# RUN CALCULATION FROM NAMES
+# -------------------------------------------------------------------------------------
+
+def run_calculation_from_names(
+    name: str,
+    db_inp_name: str,
+    db_out_name: str,
+    calculation: str,
+    calc_name: str,
+    calc_kwargs: dict = {},
+    run_kwargs: dict = {},
+    db_inp_kwargs: dict = {},
+    db_out_kwargs: dict = {},
+    basedir: str = "",
+):
+    """
+    Run calculation from name and input database.
+    """
+    from mlps_finetuning.calculators import get_calculator
+    # Get IS and FS atoms.
+    db_inp = connect(name=os.path.join(basedir, db_inp_name))
+    atoms = get_atoms_from_db(db_ase=db_inp, name=name, **db_inp_kwargs)
+    # Get calculator.
+    calc = get_calculator(calc_name=calc_name, **calc_kwargs)
+    # Run calculation.
+    print_title(name)
+    print_subtitle(f"{calculation} calculation")
+    run_calculation(
+        atoms=atoms,
+        calc=calc,
+        calculation=calculation,
+        **run_kwargs,
+    )
+    # Print Calculation status.
+    print_subtitle("Status: " + atoms.info["status"], newline_after=True)
+    # Results database.
+    db_out = connect(name=os.path.join(basedir, db_out_name))
+    # Write atoms to database.
+    db_out_kwargs = {**db_out_kwargs, "name": name, "calculation": calculation}
+    db_out_kwargs["status"] = atoms.info["status"]
+    write_atoms_to_db(db_ase=db_out, atoms=atoms, **db_out_kwargs)
+
+# -------------------------------------------------------------------------------------
 # SEARCH TS FROM NAMES
 # -------------------------------------------------------------------------------------
 
@@ -340,6 +476,7 @@ def search_TS_from_names(
     """
     Run TS-search calculation from reaction name and input database.
     """
+    from mlps_finetuning.calculators import get_calculator
     # Get IS and FS atoms.
     db_inp = connect(name=os.path.join(basedir, db_inp_name))
     db_inp_kwargs_IS = {"name": name, "image": "IS", **db_inp_kwargs}
@@ -386,6 +523,7 @@ def search_TS_from_names_list(
     """
     Run TS-search calculation from reaction name and input database.
     """
+    from mlps_finetuning.calculators import get_calculator
     # Input database.
     db_inp = connect(name=os.path.join(basedir, db_inp_name))
     # Get calculator.
@@ -412,48 +550,6 @@ def search_TS_from_names_list(
             check_IS_FS_kwargs=check_IS_FS_kwargs,
             n_restarts_TSsearch=n_restarts_TSsearch,
         )
-
-# -------------------------------------------------------------------------------------
-# RUN CALCULATION FROM NAMES
-# -------------------------------------------------------------------------------------
-
-def run_calculation_from_names(
-    name: str,
-    db_inp_name: str,
-    db_out_name: str,
-    calculation: str,
-    calc_name: str,
-    calc_kwargs: dict = {},
-    run_kwargs: dict = {},
-    db_inp_kwargs: dict = {},
-    db_out_kwargs: dict = {},
-    basedir: str = "",
-):
-    """
-    Run calculation from name and input database.
-    """
-    # Get IS and FS atoms.
-    db_inp = connect(name=os.path.join(basedir, db_inp_name))
-    atoms = get_atoms_from_db(db_ase=db_inp, name=name, **db_inp_kwargs)
-    # Get calculator.
-    calc = get_calculator(calc_name=calc_name, **calc_kwargs)
-    # Run calculation.
-    print_title(name)
-    print_subtitle(f"{calculation} calculation")
-    run_calculation(
-        atoms=atoms,
-        calc=calc,
-        calculation=calculation,
-        **run_kwargs,
-    )
-    # Print Calculation status.
-    print_subtitle("Status: " + atoms.info["status"], newline_after=True)
-    # Results database.
-    db_out = connect(name=os.path.join(basedir, db_out_name))
-    # Write atoms to database.
-    db_out_kwargs = {**db_out_kwargs, "name": name, "calculation": calculation}
-    db_out_kwargs["status"] = atoms.info["status"]
-    write_atoms_to_db(db_ase=db_out, atoms=atoms, **db_out_kwargs)
 
 # -------------------------------------------------------------------------------------
 # END

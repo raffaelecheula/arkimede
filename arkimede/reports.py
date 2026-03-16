@@ -108,8 +108,8 @@ def calculations_report(
 def plot_success_curves(
     success_steps_dict: dict,
     axes: object = None,
-    xlabel: str = "Number of steps [-]",
-    ylabel: str = "Successful calculations [%]",
+    xlabel: str = "Number of single-points [-]",
+    ylabel: str = "Successful calculations [-]",
     title: str = None,
     xmed: int = 1100,
     xmax: int = 10000,
@@ -179,8 +179,8 @@ def plot_status_data(
     calculation_list: list,
     results_dict: dict,
     ax: object = None,
-    xlabel: str = "Methods",
-    ylabel: str = "Calculations [-]",
+    xlabel: str = "Method",
+    ylabel: str = "Number of calculations [-]",
     title: str = None,
     ymax: float = 100,
     filename: str = "plot_status_data.png",
@@ -228,9 +228,9 @@ def plot_status_data(
             edgecolor="black",
         )
         plt.bar(
-            x=-1,
+            x=-10,
             height=0,
-            label=status,
+            label="success" if status == "finished" else status,
             color="darkgrey" if status == "finished" else "white",
             edgecolor="black",
             hatch=hatch_dict[status],
@@ -239,7 +239,7 @@ def plot_status_data(
     # Set axes labels and y limit.
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.set_xlim(-0.5, len(calculation_list)-0.5)
+    ax.set_xlim(-0.60, len(calculation_list) - 0.40)
     ax.set_ylim(0, ymax)
     # Set title.
     if title is not None:
@@ -322,7 +322,7 @@ def plot_steps_distribution(
     edgecolor: str = "black",
     alpha_fill: float = 0.7,
     ylabel: str = "Number of DFT single-points [-]",
-    filename: str = "plot_actlearn_steps.png",
+    filename: str = "plot_steps_DFT_AL.png",
     violin_kwargs: dict = {"points": 300},
     scatter_kwargs: dict = {"s": 20},
 ) -> object:
@@ -331,7 +331,7 @@ def plot_steps_distribution(
     """
     # Prepare figure.
     if ax is None:
-        fig, ax = plt.subplots(figsize=(6, 4), dpi=300)
+        fig, ax = plt.subplots(figsize=(4.5, 3.5), dpi=300)
         fig.subplots_adjust(left=0.15, right=0.95, bottom=0.15, top=0.95)
     # Plot half violins.
     dataset = [list(ii) for ii in steps_dict.values()]
@@ -350,6 +350,7 @@ def plot_steps_distribution(
     # Set y max.
     y_max = y_max if y_max else max([ii for jj in dataset for ii in jj]) * 1.10
     ax.set_ylim(0, y_max)
+    ax.set_xlim(-0.5, len(steps_dict) - 0.5)
     # Set axis labels.
     ax.set_xticks(positions)
     ax.set_xticklabels(steps_dict.keys())

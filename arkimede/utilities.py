@@ -2,8 +2,8 @@
 # IMPORTS
 # -------------------------------------------------------------------------------------
 
-from ase import Atoms
 import numpy as np
+from ase import Atoms
 from copy import deepcopy
 from ase.calculators.singlepoint import SinglePointCalculator, all_properties
 
@@ -259,16 +259,13 @@ def get_connectivity(
 def check_same_connectivity(
     atoms_1: Atoms,
     atoms_2: Atoms,
-    indices: list = None,
+    indices: list = "all",
 ):
     """
     Check if two structures have the same connectivity.
     """
-    # Get indices.
-    if indices == "adsorbate":
-        indices = get_indices_adsorbate(atoms=atoms_1)
-    elif indices == "not_fixed":
-        indices = get_indices_not_fixed(atoms=atoms_1)
+    # Get indices of atoms to check.
+    indices = get_indices_from_name(atoms=atoms_1, indices=indices)
     # Get connectivity matrices.
     connectivity_1 = get_connectivity(atoms=atoms_1, indices=indices)
     connectivity_2 = get_connectivity(atoms=atoms_2, indices=indices)

@@ -4,9 +4,9 @@
 
 import numpy as np
 from copy import deepcopy
-from tqdm import tqdm
 from ase import Atoms
 from ase.db.core import Database
+from ase.db import connect
 
 # -------------------------------------------------------------------------------------
 # WRITE ATOMS TO DB
@@ -79,6 +79,7 @@ def write_atoms_list_to_db(
     """
     # Monitor progress with tqdm.
     if use_tqdm is True:
+        from tqdm import tqdm
         atoms_list = tqdm(atoms_list, desc="Writing atoms to ASE DB", ncols=120)
     # Write all atoms structures in a single transaction.
     with db_ase:
@@ -147,8 +148,8 @@ def get_names_from_db(
     db_ase: Database,
     selection: str = "",
     unique: bool = True,
-    **kwargs,
-) -> Atoms:
+    **kwargs: dict,
+) -> list:
     """
     Get names of structures in database.
     """
@@ -159,6 +160,35 @@ def get_names_from_db(
     if unique is True:
         names = list({key: None for key in names}.keys())
     return names
+
+# -------------------------------------------------------------------------------------
+# GET NAMES CALCULATION TO RUN
+# -------------------------------------------------------------------------------------
+
+def get_names_calculations_to_run(
+    db_inp_name: str,
+    db_out_name: str,
+    db_inp_kwargs: dict = {},
+    db_out_kwargs: dict = {},
+    verbose: bool = True,
+) -> list:
+    """
+    Get names of calculations to run by comparing input and output databases.
+    """
+    # Get names of all calculations from input database.
+    db_inp = connect(name=db_inp_name)
+    name_list_inp = get_names_from_db(db_ase=db_inp, **db_inp_kwargs)
+    # Get names of calculations already done from output database.
+    db_out = connect(name=db_out_name)
+    name_list_out = get_names_from_db(db_ase=db_out, **db_out_kwargs)
+    # Get names of calculations to run.
+    name_list = [name for name in name_list_inp if name not in name_list_out]
+    # Print number of calculations.
+    if verbose is True:
+        print(f"Number of calculations: {len(name_list_inp)}")
+        print(f"Number of calculations to run: {len(name_list)}")
+    # Return names of calculations to run.
+    return name_list
 
 # -------------------------------------------------------------------------------------
 # END

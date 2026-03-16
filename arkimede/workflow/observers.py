@@ -51,7 +51,7 @@ def reset_eigenmode_obs(
     """
     Observer resetting the eigenmode of a dimer calculation.
     """
-    from arkimede.transtates import get_mode_TS_from_bonds_TS
+    from arkimede.workflow.transition_states import get_mode_TS_from_bonds_TS
     mode_TS = get_mode_TS_from_bonds_TS(
         atoms=atoms,
         bonds_TS=bonds_TS,

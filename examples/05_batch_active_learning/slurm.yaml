@@ -1,0 +1,11 @@
+parameters:
+  partition: ql40s
+  nodes: 1
+  ntasks-per-node: 32
+  cpus-per-task: 1
+  gpus-per-node: 1
+  mem: "377G"
+  time: "72:00:00"
+commands_pre_execution:
+  - export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-1}
+  - module load intel/2020.1 openmpi/4.0.3

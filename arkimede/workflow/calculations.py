@@ -4,6 +4,7 @@
 
 import os
 import uuid
+import shutil
 import inspect
 import numpy as np
 from copy import deepcopy
@@ -16,12 +17,7 @@ try: from ase.mep.neb import NEB, NEBOptimizer
 except: from ase.neb import NEB, NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
 
-from arkimede.utilities import (
-    get_indices_not_fixed,
-    get_indices_adsorbate,
-    filter_results,
-    update_atoms_from_atoms_opt,
-)
+from arkimede.utilities import filter_results, update_atoms_from_atoms_opt
 from arkimede.workflow.observers import (
     min_steps_obs,
     max_forcecalls_obs,
@@ -325,6 +321,7 @@ def run_dimer_calculation(
     """
     try: from ase.mep import DimerControl, MinModeAtoms, MinModeTranslate
     except: from ase.dimer import DimerControl, MinModeAtoms, MinModeTranslate
+    from arkimede.utilities import get_indices_not_fixed
     from arkimede.workflow.observers import reset_eigenmode_obs
     # Get TS bonds from info dictionary.
     if bonds_TS is None:
@@ -405,106 +402,6 @@ def run_dimer_calculation(
     atoms.info["mode_TS"] = atoms_opt.eigenmodes[0]
     if "counter" in dir(calc):
         atoms.info["counter"] = calc.counter
-    # Write image.
-    if write_images is True:
-        filename = os.path.join(directory, f"{label}.png")
-        atoms.write(filename, radii=0.9, scale=200)
-
-# -------------------------------------------------------------------------------------
-# RUN CLIMB TS BONDS CALCULATION
-# -------------------------------------------------------------------------------------
-
-def run_climbtsbonds_calculation(
-    atoms: Atoms,
-    calc: Calculator,
-    fmax: float = 0.05,
-    max_steps: int = 500,
-    min_steps: int = None,
-    logfile: str = "-",
-    label: str = "climbtsbonds",
-    directory: str = ".",
-    trajectory: str = None,
-    save_trajs: bool = False,
-    write_images: bool = False,
-    update_cell: bool = False,
-    properties: list = ["energy", "forces"],
-    optimizer: Optimizer = BFGS,
-    opt_kwargs: dict = {"maxstep": 0.01},
-    bonds_TS: list = None,
-    max_displ: float = None,
-    max_force_tot: float = None,
-    atoms_too_close: bool = False,
-    max_forcecalls: int = None,
-    reset_counter: bool = True,
-    **kwargs: dict,
-) -> None:
-    """
-    Run a ClimbTSBonds TS-search calculation.
-    """
-    from arkimede.optimize.climbtsbonds import ClimbTSBonds
-    # Get TS bonds from info dictionary.
-    if bonds_TS is None:
-        bonds_TS = atoms.info["bonds_TS"]
-    # Create directory to store the results.
-    if save_trajs is True or write_images is True:
-        os.makedirs(directory, exist_ok=True)
-    # Name of the trajectory file.
-    if trajectory is None:
-        trajectory = os.path.join(directory, f"{label}.traj") if save_trajs else None
-    # Prepare a copy of atoms.
-    atoms_opt = atoms.copy()
-    atoms_opt.calc = calc
-    atoms_opt.constraints.append(ClimbTSBonds(bonds=bonds_TS))
-    # Set up the optimizer.
-    opt = optimizer(
-        atoms=atoms_opt,
-        logfile=logfile,
-        trajectory=trajectory,
-        **opt_kwargs,
-    )
-    # Observer that checks the displacement of the TS from the starting position.
-    if max_displ is not None:
-        obs_kwargs = {"atoms": atoms_opt, "atoms_zero": atoms, "max_displ": max_displ}
-        opt.attach(function=max_displacement_obs, interval=10, **obs_kwargs)
-    # Observer to stop the calculation if the maximum force is too high.
-    if max_force_tot is not None:
-        obs_kwargs = {"atoms": atoms_opt, "max_force_tot": max_force_tot}
-        opt.attach(function=max_force_tot_obs, interval=10, **obs_kwargs)
-    # Observer to stop the calculation if two atoms are too close to each other.
-    if atoms_too_close is True:
-        obs_kwargs = {"atoms": atoms_opt}
-        opt.attach(function=atoms_too_close_obs, interval=10, **obs_kwargs)
-    # Observer to set a minimum number of steps.
-    if min_steps is not None:
-        obs_kwargs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
-        opt.attach(min_steps_obs, interval=1, **obs_kwargs)
-    # Observer to set a maximum of forces calls.
-    if max_forcecalls is not None:
-        obs_kwargs = {"opt": opt, "max_forcecalls": max_forcecalls, "calc": calc}
-        opt.attach(max_forcecalls_obs, interval=1, **obs_kwargs)
-    # Reset the number of calculator calls.
-    if "counter" in dir(calc) and reset_counter is True:
-        calc.counter = 0
-    # Run the calculation.
-    failed = 0
-    converged = False
-    fmax_start = fmax if min_steps is None else 0.
-    while opt.nsteps < max_steps and failed < 100 and not converged:
-        try:
-            converged = opt.run(fmax_start, steps=max_steps-opt.nsteps)
-            status = "finished" if has_converged(opt=opt) else "unfinished"
-        except Exception as error:
-            print(error)
-            status = "failed"
-            failed += 1
-    # Update the input atoms with the results of the calculation.
-    update_atoms_from_atoms_opt(
-        atoms=atoms,
-        atoms_opt=atoms_opt,
-        status=status,
-        properties=properties,
-        update_cell=update_cell,
-    )
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
@@ -831,13 +728,10 @@ def run_vibrations_calculation(
     """
     Run a vibrations calculation.
     """
-    import shutil
+    from arkimede.utilities import get_indices_from_name
     from arkimede.workflow.vibrations import Vibrations
     # Get indices of atoms to vibrate.
-    if indices == "adsorbate":
-        indices = get_indices_adsorbate(atoms=atoms)
-    elif indices == "not_fixed":
-        indices = get_indices_not_fixed(atoms=atoms)
+    indices = get_indices_from_name(atoms=atoms, indices=indices)
     # Label with uuid to avoid conflicts.
     if label == "vib-uuid":
         label = f"vib-{uuid.uuid4().hex}"
@@ -873,98 +767,13 @@ def run_vibrations_calculation(
         with Trajectory(filename=trajname, mode="w") as traj:
             for atoms_vib in atoms_list[1:] + atoms_list[0:1]:
                 traj.write(atoms_vib, **atoms_vib.calc.results)
-    # Remove the cache directory with the results of the calculation.
+    # Remove the cache directory.
     if remove_cache is True:
         vib.clean()
         if os.path.isdir(label):
             shutil.rmtree(label)
     # Store vibrational energies in atoms.
     atoms.info["vib_energies"] = vib_energies
-
-# -------------------------------------------------------------------------------------
-# RUN CALCULATION
-# -------------------------------------------------------------------------------------
-
-def run_calculation(
-    atoms: Atoms,
-    calc: Calculator,
-    calculation: str,
-    **kwargs: dict,
-) -> None:
-    """
-    Run calculation.
-    """
-    if calculation == "singlepoint":
-        # Single-point calculation.
-        run_singlepoint_calculation(
-            atoms=atoms,
-            calc=calc,
-            **kwargs,
-        )
-    elif calculation == "relax":
-        # Relax calculation.
-        run_relax_calculation(
-            atoms=atoms,
-            calc=calc,
-            **kwargs,
-        )
-    elif calculation == "neb":
-        # NEB calculation.
-        run_neb_calculation(
-            images=atoms,
-            calc=calc,
-            **kwargs,
-        )
-    elif calculation == "dimer":
-        # Dimer calculation.
-        run_dimer_calculation(
-            atoms=atoms,
-            calc=calc,
-            **kwargs,
-        )
-    elif calculation == "climbtsbonds":
-        # ClimbTSbonds calculaton.
-        run_climbtsbonds_calculation(
-            atoms=atoms,
-            calc=calc,
-            **kwargs,
-        )
-    elif calculation == "climbfixint":
-        # ClimbFixInternals calculaton.
-        run_climbfixint_calculation(
-            atoms=atoms,
-            calc=calc,
-            **kwargs,
-        )
-    elif calculation == "sella":
-        # Sella calculaton.
-        run_sella_calculation(
-            atoms=atoms,
-            calc=calc,
-            **kwargs,
-        )
-    elif calculation == "sella-ba":
-        # Sella calculaton.
-        run_sella_calculation(
-            atoms=atoms,
-            calc=calc,
-            modify_hessian=True,
-            **kwargs,
-        )
-    elif calculation == "irc":
-        # IRC calculaton.
-        run_irc_calculation(
-            atoms=atoms,
-            calc=calc,
-            **kwargs,
-        )
-    elif calculation == "vibrations":
-        # Vibrations calculaton.
-        run_vibrations_calculation(
-            atoms=atoms,
-            calc=calc,
-            **kwargs,
-        )
 
 # -------------------------------------------------------------------------------------
 # END

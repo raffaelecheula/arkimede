@@ -27,8 +27,7 @@ def check_atoms_not_desorbed(
     # Return True if there is at least one bond.
     if np.sum(matrix[mask_ads][:, mask_slab]) > 0:
         return True
-    else:
-        return False
+    return False
 
 # -------------------------------------------------------------------------------------
 # CHECK TS RELAX INTO IS AND FS
@@ -48,13 +47,9 @@ def check_TS_relax_into_IS_and_FS(
     Relax the TS atoms in two direction and check if the new structures have the
     same connectivity as the original IS and FS atoms.
     """
-    from arkimede.workflow.calculations import run_calculation
-    from arkimede.transtates import get_displaced_atoms_from_atoms_TS
-    from arkimede.utilities import (
-        get_indices_adsorbate,
-        get_indices_not_fixed,
-        check_same_connectivity,
-    )
+    from arkimede.workflow.recipes import run_calculation
+    from arkimede.workflow.transition_states import get_displaced_atoms_from_atoms_TS
+    from arkimede.utilities import check_same_connectivity
     # Get displaced atoms.
     if method == "irc":
         # IRC method.
@@ -85,11 +80,6 @@ def check_TS_relax_into_IS_and_FS(
         atoms_TS.info["positions_relaxed"] = [
             atoms_new_list[ii].positions for ii in (0, 1)
         ]
-    # Get indices of atoms to check.
-    if indices_check == "adsorbate":
-        indices_check = get_indices_adsorbate(atoms=atoms)
-    elif indices_check == "not_fixed":
-        indices_check = get_indices_not_fixed(atoms=atoms)
     # Check connectivity matches.
     atoms_old_list = [atoms_IS, atoms_FS]
     for jj_list in [[0, 1], [1, 0]]:

@@ -7,17 +7,14 @@ import shutil
 import timeit
 import numpy as np
 from copy import deepcopy
-from ase import Atoms, atoms
+from ase import Atoms
 from ase.calculators.calculator import Calculator
 from ase.io import Trajectory
 from ase.db import connect
 
 from arkimede.utilities import print_title, filter_results, copy_atoms_and_results
-from arkimede.databases import write_atoms_list_to_db
-from arkimede.workflow.calculations import run_calculation
+from arkimede.workflow.recipes import run_calculation
 from arkimede.databases import get_atoms_from_db, write_atoms_to_db
-
-from mlps_finetuning.calculators import get_calculator, get_finetune_function
 
 # -------------------------------------------------------------------------------------
 # RUN ACTIVE LEARNING
@@ -355,6 +352,7 @@ def run_active_learning_from_names(
     """
     Run active learning calculation from name and input database.
     """
+    from mlps_finetuning.calculators import get_calculator, get_finetune_function
     # Get atoms from database.
     db_inp = connect(name=os.path.join(basedir, db_inp_name))
     atoms = get_atoms_from_db(db_ase=db_inp, name=name, **db_inp_kwargs)
@@ -419,6 +417,7 @@ def run_active_learning_list_from_names(
     """
     Run active learning calculation from name and input database.
     """
+    from mlps_finetuning.calculators import get_calculator, get_finetune_function
     # Get atoms from database.
     db_inp = connect(name=os.path.join(basedir, db_inp_name))
     atoms_list = [
