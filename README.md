@@ -5,7 +5,7 @@
 # ARKIMEDE
 **Automatic Reaction KInetic MEchanism DEsign**
 
-ARKIMEDE is a Python framework for studying catalytic reactions on solid surfaces. It combines **transition-state (TS) searches**, **machine-learning potentials (MLPs)**, and **density-functional theory (DFT) calculations** within unified workflows based on the **Atomic Simulation Environment (ASE)**. The goal of ARKIMEDE is to facilitate the systematic exploration of catalytic mechanisms of surface reactions with efficient TS-search algorithms and active-learning strategies.
+`arkimede` is a Python framework for studying catalytic reactions on solid surfaces. It combines **transition-state (TS) searches**, **machine-learning potentials (MLPs)**, and **density-functional theory (DFT) calculations** within unified workflows based on the **Atomic Simulation Environment (ASE)**. The goal of `arkimede` is to facilitate the systematic exploration of catalytic mechanisms of surface reactions with efficient TS-search algorithms and active-learning strategies.
 
 ## Installation
 
@@ -60,5 +60,4 @@ This project is licensed under the GNU General Public License v3.0. See the [LIC
 
 ## Author
 
-**Raffaele Cheula**
-email: cheula.raffaele@gmail.com
+Raffaele Cheula (email: cheula.raffaele@gmail.com)
