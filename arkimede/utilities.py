@@ -173,7 +173,7 @@ def copy_atoms_and_results(
     properties: list = all_properties,
 ):
     """
-    Copy an ase Atoms object along with its calculator results.
+    Copy an ASE Atoms object along with its calculator results.
     """
     # Copy atoms.
     atoms_copy = atoms.copy()
@@ -203,7 +203,7 @@ def get_edges_list(
     dist_ratio_thr: float = 1.25,
 ):
     """
-    Get the edges for selected atoms in an ase Atoms object.
+    Get the edges for selected atoms in an ASE Atoms object.
     """
     from itertools import combinations
     from ase.neighborlist import natural_cutoffs
@@ -235,7 +235,7 @@ def get_connectivity(
     dist_ratio_thr: float = 1.25,
 ):
     """
-    Get the connectivity matrix for selected atoms in an ase Atoms object.
+    Get the connectivity matrix for selected atoms in an ASE Atoms object.
     """
     # Get edges list.
     if edges_list is None:

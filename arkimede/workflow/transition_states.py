@@ -35,7 +35,7 @@ def get_idpp_interpolated_images(
     Get idpp interpolated images with strict optimization parameters.
     """
     images = [atoms_IS.copy()]
-    images += [atoms_IS.copy() for i in range(n_images-2)]
+    images += [atoms_IS.copy() for i in range(n_images - 2)]
     images += [atoms_FS.copy()]
     neb = NEB(images=images)
     neb.interpolate()
@@ -236,8 +236,8 @@ def get_new_IS_and_FS_from_images(
     Get new initial and final states (to be relaxed) from NEB images.
     """
     index_TS = np.argmax([image.get_potential_energy() for image in images])
-    index_IS = index_TS-1 if index_TS > 0 else index_TS
-    index_FS = index_TS+1 if index_TS < len(images) else index_TS
+    index_IS = index_TS - 1 if index_TS > 0 else index_TS
+    index_FS = index_TS + 1 if index_TS < len(images) else index_TS
     atoms_IS_new = images[index_IS].copy()
     atoms_FS_new = images[index_FS].copy()
     # Return new initial and final states.

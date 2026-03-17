@@ -168,8 +168,8 @@ def plot_success_curves(
     # Save the figure.
     if filename is not None:
         plt.savefig(filename)
-    # Return the figure object.
-    return fig
+    # Return the axis object.
+    return ax1, ax2
 
 # -------------------------------------------------------------------------------------
 # PLOT STATUS DATA
@@ -254,8 +254,8 @@ def plot_status_data(
     # Save the figure.
     if filename is not None:
         plt.savefig(filename)
-    # Return the figure object.
-    return fig
+    # Return the axis object.
+    return ax
 
 # -------------------------------------------------------------------------------------
 # PLOT CALCULATION TIMES    
@@ -307,8 +307,8 @@ def plot_calculation_times(
     # Save figure.
     if filename is not None:
         plt.savefig(filename)
-    # Return the figure object.
-    return fig
+    # Return the axis object.
+    return ax
 
 # -------------------------------------------------------------------------------------
 # PLOT STEPS DISTRIBUTION
@@ -358,8 +358,8 @@ def plot_steps_distribution(
     # Save the figure.
     if filename is not None:
         plt.savefig(filename)
-    # Return the figure object.
-    return fig
+    # Return the axis object.
+    return ax
 
 # -------------------------------------------------------------------------------------
 # END
