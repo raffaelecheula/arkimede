@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arkimede"
-version = "0.0.2"
+version = "1.0.0"
 description = "Automatic Reactions KInetic MEchanism DEsign."
 readme = "README.md"
 requires-python = ">=3.8, <4"
@@ -16,6 +16,7 @@ urls = { "Source" = "https://github.com/raffaelecheula/arkimede.git" }
 dependencies = [
     "numpy",
     "scipy",
+    "matplotlib",
     "ase",
     "PyYAML",
 ]
