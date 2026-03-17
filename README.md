@@ -25,10 +25,11 @@ Core dependencies:
 - Atomic Simulation Environment (ASE)
 
 Other dependencies:
-- Sella
+- Sella (TS-searches methods)
 - MLP codes (CHGNet, MACE, OCP, FAIRChem)
 - DFT codes (Quantum Espresso, VASP)
-- PyYAML
+- PyYAML (YAML files management)
+- Shephex (SLURM jobs management)
 
 ## Examples
 
