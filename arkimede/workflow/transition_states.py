@@ -142,7 +142,7 @@ def get_mode_TS_from_bonds_TS(
     atoms: Atoms,
     bonds_TS: list = None,
     sign_bond_dict: dict = {"break": +1, "form": -1},
-    **kwargs,
+    **kwargs: dict,
 ) -> np.ndarray:
     """
     Get TS mode from the TS bonds.
@@ -168,38 +168,26 @@ def get_mode_TS_from_bonds_TS(
 def get_mode_TS_from_vibrations(
     atoms: Atoms,
     calc: Calculator,
-    delta: float = 0.01,
-    indices: list = "not-fixed",
-    label: str = "vib-uuid",
+    indices_vib: list = "not-fixed",
+    vib_cache: str = "vib-uuid",
     clean_cache: bool = True,
-    **kwargs,
+    **kwargs: dict,
 ) -> np.ndarray:
     """
-    Get vibrational energies and modes.
+    Get TS mode from finite-difference vibrations calculation.
     """
-    import shutil
-    from ase.vibrations import Vibrations
-    from arkimede.utilities import get_indices_from_name
-    atoms_copy = atoms.copy()
-    atoms_copy.calc = calc
-    # Get indices of atoms to vibrate.
-    indices = get_indices_from_name(atoms=atoms, indices=indices)
-    # Label with uuid to avoid conflicts.
-    if label == "vib-uuid":
-        label = f"vib-{uuid.uuid4().hex}"
+    from arkimede.workflow.calculations import run_vibrations_calculation
     # Run vibrations calculations.
-    vib = Vibrations(atoms=atoms_copy, indices=indices, delta=delta, name=label)
-    vib.clean()
-    vib.run()
-    data = vib.get_vibrations()
-    energies, modes = data.get_energies_and_modes(all_atoms=True)
-    # Remove the cache directory.
-    if clean_cache is True:
-        vib.clean()
-        if os.path.isdir(label):
-            shutil.rmtree(label)
-    # Return energies and modes.
-    return modes[0]
+    vib_hessian, vib_energies, vib_modes = run_vibrations_calculation(
+        atoms=atoms,
+        calc=calc,
+        indices_vib=indices_vib,
+        vib_cache=vib_cache,
+        clean_cache=clean_cache,
+        **kwargs,
+    )
+    # Return TS mode.
+    return vib_modes[0]
 
 # -------------------------------------------------------------------------------------
 # ATOMS IMAGES NEB FROM ATOMS TS 

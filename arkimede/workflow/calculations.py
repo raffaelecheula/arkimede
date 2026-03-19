@@ -4,7 +4,6 @@
 
 import os
 import uuid
-import shutil
 import inspect
 import numpy as np
 from copy import deepcopy
@@ -715,14 +714,19 @@ def run_irc_calculation(
 def run_vibrations_calculation(
     atoms: Atoms,
     calc: Calculator,
-    label: str = "vib-uuid",
+    label: str = "vibrations",
+    vib_cache: str = "vib-uuid",
     directory: str = ".",
+    trajectory: str = None,
     save_trajs: bool = False,
     properties: list = ["energy", "forces"],
-    indices: str = "adsorbate",
+    indices_vib: str = "adsorbate",
     delta: float = 0.01,
     nfree: int = 2,
-    remove_cache: bool = False,
+    remove_cache: bool = True,
+    store_energies: bool = True,
+    store_modes: bool = False,
+    store_hessian: bool = False,
     **kwargs: dict,
 ) -> None:
     """
@@ -731,49 +735,46 @@ def run_vibrations_calculation(
     from arkimede.utilities import get_indices_from_name
     from arkimede.workflow.vibrations import Vibrations
     # Get indices of atoms to vibrate.
-    indices = get_indices_from_name(atoms=atoms, indices=indices)
-    # Label with uuid to avoid conflicts.
-    if label == "vib-uuid":
-        label = f"vib-{uuid.uuid4().hex}"
+    indices_vib = get_indices_from_name(atoms=atoms, indices=indices_vib)
+    # Cache directory with uuid to avoid conflicts.
+    if vib_cache == "vib-uuid":
+        vib_cache = f"vib-{uuid.uuid4().hex}"
     # Create directory to store the results.
     if save_trajs is True:
         os.makedirs(directory, exist_ok=True)
+    # Name of the trajectory file.
+    if trajectory is None:
+        trajectory = os.path.join(directory, f"{label}.traj") if save_trajs else None
     # Initialize the vibrations calculation.
     atoms_vib = atoms.copy()
     atoms_vib.calc = calc
     # Prepare vibrations calculation.
     vib = Vibrations(
         atoms=atoms_vib,
-        indices=indices,
-        name=label,
+        indices=indices_vib,
+        name=vib_cache,
         delta=delta,
         nfree=nfree,
+        trajectory=trajectory,
     )
-    # Run the calculation and get normal frequencies.
-    vib.clean(empty_files=True)
+    # Run the calculation and get vibrational energies and modes.
+    vib.clean()
     vib.run()
-    vib_energies = vib.get_energies()
-    # Get the atoms objects of the displacements.
-    atoms_list = []
-    for disp, atoms_vib in vib.iterdisplace(inplace=True):
-        atoms_vib = atoms_vib.copy()
-        results = filter_results(results=vib.cache[disp.name], properties=properties)
-        atoms_vib.calc = SinglePointCalculator(atoms=atoms_vib, **results)
-        atoms_vib.info["displacement"] = str(disp.name)
-        atoms_list.append(atoms_vib)
-    # Write Trajectory files for each displacement.
-    if save_trajs is True:
-        trajname = os.path.join(directory, f"{label}.traj")
-        with Trajectory(filename=trajname, mode="w") as traj:
-            for atoms_vib in atoms_list[1:] + atoms_list[0:1]:
-                traj.write(atoms_vib, **atoms_vib.calc.results)
+    data = vib.get_vibrations()
+    vib_hessian = vib.H.copy()
+    vib_energies, vib_modes = data.get_energies_and_modes(all_atoms=True)
     # Remove the cache directory.
     if remove_cache is True:
-        vib.clean()
-        if os.path.isdir(label):
-            shutil.rmtree(label)
-    # Store vibrational energies in atoms.
-    atoms.info["vib_energies"] = vib_energies
+        vib.remove_cache()
+    # Store vibrational energies and modes in atoms info dictionary.
+    if store_energies is True:
+        atoms.info["vib_energies"] = vib_energies
+    if store_modes is True:
+        atoms.info["vib_modes"] = vib_modes
+    if store_hessian is True:
+        atoms.info["vib_hessian"] = vib_hessian
+    # Return vibrational Hessian, energies, and modes.
+    return vib_hessian, vib_energies, vib_modes
 
 # -------------------------------------------------------------------------------------
 # END

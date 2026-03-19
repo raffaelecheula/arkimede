@@ -13,7 +13,7 @@ from ase.calculators.calculator import Calculator
 def check_atoms_not_desorbed(
     atoms: Atoms,
     dist_ratio_thr: float = 1.40,
-    **kwargs,
+    **kwargs: dict,
 ) -> bool:
     """
     Checks if the adsorbate atoms has not desorbed from the surface.
@@ -41,7 +41,8 @@ def check_TS_relax_into_IS_and_FS(
     method: str = "vibrations",
     indices_check: list = "adsorbate",
     store_positions_relaxed: bool = False,
-    **kwargs,
+    label_dict: dict = {"forward": "fwd", "reverse": "rev"},
+    **kwargs: dict,
 ) -> bool:
     """
     Relax the TS atoms in two direction and check if the new structures have the
@@ -67,12 +68,13 @@ def check_TS_relax_into_IS_and_FS(
     # Run calculations.
     atoms_new_list = []
     for atoms, direction in zip(atoms_displaced, ["forward", "reverse"]):
+        kwargs_ii = {"label": f"{calculation}_{label_dict[direction]}", **kwargs}
         run_calculation(
             atoms=atoms,
             calc=calc,
             calculation=calculation,
             direction=direction,
-            **kwargs,
+            **kwargs_ii,
         )
         atoms_new_list.append(atoms)
     # Store positions of relaxed atoms in atoms info.

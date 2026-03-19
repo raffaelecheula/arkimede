@@ -16,7 +16,7 @@ class BFGSClimbFixInternals(BFGSClimbFixInternalsOriginal):
         self,
         optB_max_steps: int = 1000,
         max_force_tot: float = None,
-        **kwargs,
+        **kwargs: dict,
     ):
         super().__init__(**kwargs)
         self.optB_max_steps = optB_max_steps

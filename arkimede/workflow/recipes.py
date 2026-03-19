@@ -142,7 +142,7 @@ def search_TS_from_atoms_IS_and_FS(
     print_title(name)
     # Relax initial and final states.
     for atoms, image in zip((atoms_IS, atoms_FS), ("IS", "FS")):
-        run_relax_kwargs_ii = run_relax_kwargs.copy()
+        run_relax_kwargs_ii = {"label": f"relax_{image}", **run_relax_kwargs}
         db_kwargs = {"name": name, "image": image, "calculation": "relax"}
         db_kwargs.update(run_relax_kwargs_ii.pop("db_out_kwargs", {}))
         if get_atoms_from_db(db_ase=db_out, none_ok=True, **db_kwargs) is None:
@@ -298,7 +298,7 @@ def rattle_atoms_and_parameters(
     atoms: Atoms,
     parameters: dict,
     calculation_TS: str,
-    indices: list = "adsorbate",
+    indices_rattle: list = "adsorbate",
     scale_transl: float = 0.25,
     scale_rattle: float = 0.15,
     parameters_ranges: dict = None,
@@ -309,12 +309,12 @@ def rattle_atoms_and_parameters(
     Modify TS atoms by performing a random translation and rattle of the atoms.
     """
     # Get indices of atoms to rattle.
-    indices = get_indices_from_name(atoms=atoms, indices=indices)
+    indices_rattle = get_indices_from_name(atoms=atoms, indices=indices_rattle)
     # Random translation and rattle.
-    positions_ads = atoms.positions[indices]
+    positions_rattle = atoms.positions[indices_rattle]
     transl = np.random.normal(scale=scale_transl, size=3)
-    rattle = np.random.normal(scale=scale_rattle, size=positions_ads.shape)
-    atoms.positions[indices] = positions_ads + transl + rattle
+    rattle = np.random.normal(scale=scale_rattle, size=positions_rattle.shape)
+    atoms.positions[indices_rattle] = positions_rattle + transl + rattle
     # Get default parameters ranges.
     if parameters_ranges is None:
         parameters_ranges = default_parameters_ranges(calculation=calculation_TS)

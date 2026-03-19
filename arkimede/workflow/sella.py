@@ -10,102 +10,105 @@ from ase import Atoms
 from ase.optimize.optimize import Optimizer
 
 # -------------------------------------------------------------------------------------
-# HESSIAN FROM VIBRATIONS
+# GET HESSIAN FROM VIBRATIONS FUN
 # -------------------------------------------------------------------------------------
 
-def hessian_from_vibrations(
-    atoms: Atoms,
-    delta: float = 0.01,
-    label: str = "vib-uuid",
-    indices: list = "not-fixed",
-    remove_cache: bool = False,
+def get_hessian_from_vibrations_fun(
+    indices_vib: list = "adsorbate",
+    label: str = "hessian",
+    **kwargs: dict,
 ):
     """
-    Function to calculate the hessian matrix from finite elements.
+    Get a function to calculate the Hessian matrix from finite elements.
     """
-    from ase.vibrations import Vibrations
     from arkimede.utilities import get_indices_from_name
-    # Get indices of atoms to vibrate.
-    indices = get_indices_from_name(atoms=atoms, indices=indices)
-    # Label with uuid to avoid conflicts.
-    if label == "vib-uuid":
-        label = f"vib-{uuid.uuid4().hex}"
-    # Prepare vibrations calculation.
-    positions = atoms.get_positions()
-    masses = atoms.get_masses()
-    atoms.set_masses([1. for aa in atoms])
-    # Run vibrations calculation.
-    vib = Vibrations(atoms=atoms, indices=indices, delta=delta)
-    vib.clean()
-    vib.run()
-    data = vib.get_vibrations()
-    # Build full Hessian.
-    cart_idx = np.repeat(3 * np.array(vib.indices), 3).reshape(-1, 3) + np.arange(3)
-    hessian = np.zeros((3 * len(atoms), 3 * len(atoms)))
-    hessian[np.ix_(cart_idx.ravel(), cart_idx.ravel())] = vib.H
-    # Restore atoms object.
-    atoms.set_positions(positions)
-    atoms.set_masses(masses)
-    # Remove the cache directory.
-    if remove_cache is True:
-        vib.clean()
-        if os.path.isdir(label):
-            shutil.rmtree(label)
-    # Return Hessian.
-    return hessian
+    from arkimede.workflow.calculations import run_vibrations_calculation
+    # Function to calculate the Hessian matrix.
+    def hessian_from_vibrations(atoms: Atoms):
+        # Get indices of atoms to vibrate.
+        indices_vib_ii = get_indices_from_name(atoms=atoms, indices=indices_vib)
+        # Prepare vibrations calculation.
+        positions = atoms.get_positions()
+        masses = atoms.get_masses()
+        atoms.set_masses([1. for aa in atoms])
+        # Run vibrations calculations.
+        vib_hessian, vib_energies, vib_modes = run_vibrations_calculation(
+            atoms=atoms,
+            calc=atoms.calc,
+            indices_vib=indices_vib_ii,
+            label=label,
+            **kwargs,
+        )
+        # Build full Hessian.
+        idx = np.repeat(3 * np.array(indices_vib_ii), 3).reshape(-1, 3) + np.arange(3)
+        hessian = np.zeros((3 * len(atoms), 3 * len(atoms)))
+        hessian[np.ix_(idx.ravel(), idx.ravel())] = vib_hessian
+        # Restore atoms object.
+        atoms.set_positions(positions)
+        atoms.set_masses(masses)
+        # Return Hessian.
+        return hessian
+    # Return function.
+    return hessian_from_vibrations
 
 # -------------------------------------------------------------------------------------
-# HESSIAN FROM MODE TS
+# GET HESSIAN FROM MODE TS FUN
 # -------------------------------------------------------------------------------------
 
-def hessian_from_mode_TS(
-    atoms: Atoms,
+def get_hessian_from_mode_TS_fun(
     scale: float = 1.0,
+    **kwargs: dict,
 ):
     """
-    Function to initialize the hessian matrix with negative curvature in
+    Get a function to initialize the Hessian matrix with negative curvature in
     correspondance of the TS mode.
     """
-    # Get data of mode TS.
-    mode_TS = np.array(atoms.info["mode_TS"]).copy()
-    # Build Hessian with negative curvature in correspondence of the TS mode.
-    mode_TS = mode_TS.ravel()
-    mode_TS /= np.linalg.norm(mode_TS)
-    hessian = np.eye(len(mode_TS))
-    hessian -= scale * np.outer(mode_TS, mode_TS)
-    # Return Hessian.
-    return hessian
+    def hessian_from_mode_TS(atoms: Atoms):
+        # Get data of mode TS.
+        mode_TS = np.array(atoms.info["mode_TS"]).copy()
+        # Build Hessian with negative curvature in correspondence of the TS mode.
+        mode_TS = mode_TS.ravel()
+        mode_TS /= np.linalg.norm(mode_TS)
+        hessian = np.eye(len(mode_TS))
+        hessian -= scale * np.outer(mode_TS, mode_TS)
+        # Return Hessian.
+        return hessian
+    # Return function.
+    return hessian_from_mode_TS
 
 # -------------------------------------------------------------------------------------
-# HESSIAN FROM BONDS TS
+# GET HESSIAN FROM BONDS TS
 # -------------------------------------------------------------------------------------
 
-def hessian_from_bonds_TS(
-    atoms: Atoms,
+def get_hessian_from_bonds_TS_fun(
     sign_bond_dict: dict = {"break": +1, "form": -1},
     scale: float = 1.0,
+    **kwargs: dict,
 ):
     """
-    Function to initialize the hessian matrix with negative curvature in
+    Get a function to initialize the Hessian matrix with negative curvature in
     correspondance of the TS bonds.
     """
-    # Get data of TS bonds.
-    bonds_TS = atoms.info["bonds_TS"]
-    # Build Hessian with negative curvature in correspondence of TS bonds.
-    mode_TS = np.zeros((len(atoms), 3))
-    for bond in bonds_TS:
-        index_a, index_b, sign = bond
-        if isinstance(sign, str):
-            sign = sign_bond_dict[sign]
-        dir_bond = atoms.positions[index_a] - atoms.positions[index_b]
-        mode_TS[index_a] += dir_bond * sign
-        mode_TS[index_b] -= dir_bond * sign
-    mode_TS = mode_TS.ravel()
-    mode_TS /= np.linalg.norm(mode_TS)
-    hessian = np.eye(len(mode_TS))
-    hessian -= scale * np.outer(mode_TS, mode_TS)
-    # Return Hessian.
-    return hessian
+    def hessian_from_bonds_TS(atoms: Atoms):
+        # Get data of TS bonds.
+        bonds_TS = atoms.info["bonds_TS"]
+        # Build Hessian with negative curvature in correspondence of TS bonds.
+        mode_TS = np.zeros((len(atoms), 3))
+        for bond in bonds_TS:
+            index_a, index_b, sign = bond
+            if isinstance(sign, str):
+                sign = sign_bond_dict[sign]
+            dir_bond = atoms.positions[index_a] - atoms.positions[index_b]
+            mode_TS[index_a] += dir_bond * sign
+            mode_TS[index_b] -= dir_bond * sign
+        mode_TS = mode_TS.ravel()
+        mode_TS /= np.linalg.norm(mode_TS)
+        hessian = np.eye(len(mode_TS))
+        hessian -= scale * np.outer(mode_TS, mode_TS)
+        # Return Hessian.
+        return hessian
+    # Return function.
+    return hessian_from_bonds_TS
 
 # -------------------------------------------------------------------------------------
 # MODIFY HESSIAN OBS
@@ -119,7 +122,7 @@ def modify_hessian_obs(
     sign_bond_dict: dict = {"break": +1, "form": -1},
 ):
     """
-    Observer that modifies the hessian matrix and set negative curvature in
+    Observer that modifies the Hessian matrix and set negative curvature in
     corrispondance of the TS bonds.
     """
     # Get Hessian.
