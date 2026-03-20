@@ -31,9 +31,6 @@ def main():
     # Prepare ASE database.
     db_ase = connect(name=db_name)
 
-    # Read excluded calculations.
-    excluded = yaml.safe_load(open("excluded.yaml", "r"))
-
     # Calculation report.
     results_dict, success_steps_dict = calculations_report(
         calculation_list=calculation_list,
@@ -43,7 +40,6 @@ def main():
         not_in_status_list="failed",
         percentages=percentages,
         print_report=True,
-        excluded=excluded,
     )
     # Plot success curves.
     plot_success_curves(

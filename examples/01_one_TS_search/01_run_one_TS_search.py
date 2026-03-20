@@ -26,14 +26,14 @@ def main():
     calculation_TS = "sella-ba" # neb | dimer | climbfixint | sella | sella-ba
     neb_steps = 0 # Number of NEB steps to run before the TS-search.
     n_restarts_TSsearch = 0 # Number of restarts in case the TS-search fails.
-    use_approx_hessian = True # Set function to get the Hessian for Sella optimization.
+    use_hessian_function = True # Set function to get the Hessian when using Sella.
     save_trajs = True # Save trajectory files of the calculations.
     directory = "trajectories" # Directory to save the trajectory files.
 
     # Parameters for the relaxation of the IS and FS of the reaction.
     run_relax_kwargs = {
         "fmax": 0.05, # Forces convergence threshold [eV/Å].
-        "max_steps": 500, # Maximum number of steps in the relax calculation.
+        "max_steps": 0, # Maximum number of steps in the relax calculation.
         "save_trajs": save_trajs,
         "directory": directory,
     }
@@ -87,7 +87,7 @@ def main():
     calc = get_calculator(calc_name="OCP_eSEN", logfile="log.txt")
 
     # Get function to calculate the approximate Hessian for TS-search with Sella.
-    if use_approx_hessian is True:
+    if use_hessian_function is True:
         from arkimede.workflow.sella import get_hessian_from_vibrations_fun
         hessian_function = get_hessian_from_vibrations_fun(**hessian_kwargs)
         run_TSsearch_kwargs["opt_kwargs"] = {"hessian_function": hessian_function}

@@ -7,7 +7,7 @@ os.environ["MKL_THREADING_LAYER"] = "GNU"
 import yaml
 
 from arkimede.databases import get_names_calculations_to_run
-from arkimede.workflow.recipes import search_TS_from_names
+from arkimede.workflow.recipes import run_calculation_from_names
 
 # -------------------------------------------------------------------------------------
 # MAIN
@@ -16,29 +16,20 @@ from arkimede.workflow.recipes import search_TS_from_names
 def main():
 
     # Calculation parameters.
-    calculation_TS = "sella-ba"
+    calculation = "sella-ba"
+    # MLP calculator parameters.
+    calc_MLP_name = "OCP_eSEN"
     # DFT calculator parameters.
     calc_DFT_name = "Espresso"
     calc_DFT_kwargs = {"basedir": os.getcwd(), "clean_directory": True, "socket": True}
     # Databases parameters.
-    db_inp_name = f"../00_databases/SAA_DFT_reactions.db"
-    db_out_name = f"../00_databases/DFT_relax.db"
-    db_inp_kwargs = {}
-    db_out_kwargs = {}
+    db_inp_name = f"../00_databases/MLP_relax_{calc_MLP_name}.db"
+    db_out_name = f"../00_databases/DFT_after_{calc_MLP_name}.db"
+    db_inp_kwargs = {"calculation": calculation, "neb_steps": 0, "status": "finished"}
+    db_out_kwargs = {"calculation": calculation, "image": "TS"}
     # Shephex parameters.
     use_shephex = True
     
-    # Relax parameters.
-    run_relax_kwargs = {
-        "fmax": 0.05, # [eV/Å]
-        "max_steps": 0,
-    }
-    # NEB parameters.
-    run_NEB_kwargs = {
-        "fmax": 0.05, # [eV/Å]
-        "max_steps": 0,
-        "n_images": 10,
-    }
     # TS-search parameters.
     run_TSsearch_kwargs = {
         "fmax": 0.05, # [eV/Å]
@@ -46,17 +37,13 @@ def main():
         "max_forcecalls": 10000,
         "max_force_tot": 50.,
     }
-    # IS and FS check parameters.
-    check_IS_FS_kwargs = {
-        "method": None,
-    }
 
     # Get names of calculations to run.
     name_list = get_names_calculations_to_run(
         db_inp_name=db_inp_name,
         db_out_name=db_out_name,
         db_inp_kwargs=db_inp_kwargs,
-        db_out_kwargs={**db_out_kwargs, "calculation": calculation_TS},
+        db_out_kwargs={**db_out_kwargs, "calculation": calculation},
     )
 
     # Prepare Shephex executor for parallel Slurm jobs.
@@ -70,28 +57,26 @@ def main():
     experiment_list = []
     for name in name_list:
         # Experiment parameters.
-        experiment_kwargs = {
+        exp_kwargs = {
             "name": name,
             "db_inp_name": db_inp_name,
             "db_out_name": db_out_name,
+            "calculation": calculation,
             "calc_name": calc_DFT_name,
             "calc_kwargs": calc_DFT_kwargs,
-            "calculation_TS": calculation_TS,
-            "run_relax_kwargs": run_relax_kwargs,
-            "run_NEB_kwargs": run_NEB_kwargs,
-            "run_TSsearch_kwargs": run_TSsearch_kwargs,
-            "check_IS_FS_kwargs": check_IS_FS_kwargs,
+            "run_kwargs": run_TSsearch_kwargs,
             "db_inp_kwargs": db_inp_kwargs,
+            "db_out_kwargs": db_out_kwargs,
             "basedir": os.getcwd(),
         }
         if use_shephex is True:
             # Set up experiment for parallel Slurm jobs.
             experiment_list.append(
-                hexperiment()(search_TS_from_names)(**experiment_kwargs)
+                hexperiment()(run_calculation_from_names)(**exp_kwargs)
             )
         else:
             # Run experiment in serial.
-            search_TS_from_names(**experiment_kwargs)
+            run_calculation_from_names(**exp_kwargs)
     
     # Submit experiments.
     if use_shephex is True:

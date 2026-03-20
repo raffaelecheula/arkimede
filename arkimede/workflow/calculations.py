@@ -108,7 +108,7 @@ def run_relax_calculation(
     atoms: Atoms,
     calc: Calculator,
     fmax: float = 0.05,
-    max_steps: int = 300,
+    max_steps: int = 500,
     min_steps: int = None,
     logfile: str = "-",
     label: str = "relax",
@@ -182,7 +182,7 @@ def run_neb_calculation(
     images: list,
     calc: Calculator,
     fmax: float = 0.05,
-    max_steps: int = 300,
+    max_steps: int = 500,
     min_steps: int = None,
     logfile: str = "-",
     label: str = "neb",
@@ -238,7 +238,7 @@ def run_neb_calculation(
         results = filter_results(results=images[ii].calc.results)
         images[ii].calc = SinglePointCalculator(atoms=images[ii], **results)
     # Set up the optimizer.
-    opt = optimizer(neb, logfile=logfile, **opt_kwargs)
+    opt = optimizer(neb, logfile=logfile, trajectory=trajectory, **opt_kwargs)
     # Observer for activating the climbing image.
     if activate_climb is True:
         obs_kwargs = {"neb": neb, "ftres": ftres_climb}
@@ -267,11 +267,16 @@ def run_neb_calculation(
     fmax_start = fmax if min_steps is None else 0.
     while opt.nsteps < max_steps and not converged:
         try:
-            converged = opt.run(fmax=fmax, steps=max_steps-opt.nsteps)
+            converged = opt.run(fmax=fmax, steps=max_steps - opt.nsteps)
         except TSConverged as stop:
             converged = True
+    # Substitute calculator of intermediate images.
+    for ii in range(1, len(images) - 1):
+        images[ii].get_potential_energy()
+        results = filter_results(results=images[ii].calc.results)
+        images[ii].calc = SinglePointCalculator(atoms=images[ii], **results)
     # Write trajectory.
-    if save_trajs is True:
+    if save_trajs is True and max_steps == 0:
         with Trajectory(filename=trajectory, mode="w") as traj:
             for atoms in images:
                 traj.write(atoms, **atoms.calc.results)

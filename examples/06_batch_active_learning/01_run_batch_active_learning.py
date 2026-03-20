@@ -7,7 +7,7 @@ os.environ["MKL_THREADING_LAYER"] = "GNU"
 import yaml
 
 from arkimede.databases import get_names_calculations_to_run
-from arkimede.workflow.active_learning import run_active_learning_from_names
+from arkimede.workflow.active_learning import run_batch_active_learning_from_names
 
 # -------------------------------------------------------------------------------------
 # MAIN
@@ -17,15 +17,16 @@ def main():
 
     # Calculation parameters.
     calculation = "sella-ba"
+    group_by_surface = True
     # MLP calculator parameters.
     calc_MLP_name = "OCP_eSEN"
     calc_MLP_kwargs = {"logfile": "log.txt"}
     # DFT calculator parameters.
     calc_DFT_name = "Espresso"
-    calc_DFT_kwargs = {"basedir": os.getcwd(), "clean_directory": True, "socket": True}
+    calc_DFT_kwargs = {"basedir": os.getcwd(), "clean_directory": True}
     # Databases parameters.
     db_inp_name = f"../00_databases/MLP_relax_{calc_MLP_name}.db"
-    db_out_name = f"../00_databases/AL_serial_{calc_MLP_name}.db"
+    db_out_name = f"../00_databases/AL_groups_{calc_MLP_name}.db"
     db_inp_kwargs = {"calculation": calculation, "neb_steps": 0, "status": "finished"}
     db_out_kwargs = {"calculation": calculation, "image": "TS"}
     # Shephex parameters.
@@ -68,12 +69,24 @@ def main():
         executor = SlurmExecutor(**slurm_config["parameters"])
         executor._commands_pre_execution = slurm_config["commands_pre_execution"]
 
+    # Group names by surface.
+    if group_by_surface is True:
+        surface_dict = {}
+        for name in name_list:
+            surface = name.split("_")[0]
+            if surface not in surface_dict:
+                surface_dict[surface] = []
+            surface_dict[surface].append(name)
+        group_list = surface_dict.values()
+    else:
+        group_list = [name_list]
+    
     # Run calculations.
     experiment_list = []
-    for name in name_list:
+    for name_list in group_list:
         # Experiment parameters.
-        experiment_kwargs = {
-            "name": name,
+        exp_kwargs = {
+            "name_list": name_list,
             "db_inp_name": db_inp_name,
             "db_out_name": db_out_name,
             "calculation": calculation,
@@ -91,12 +104,12 @@ def main():
         if use_shephex is True:
             # Set up experiment for parallel Slurm jobs.
             experiment_list.append(
-                hexperiment()(run_active_learning_from_names)(**experiment_kwargs)
+                hexperiment()(run_batch_active_learning_from_names)(**exp_kwargs)
             )
         else:
             # Run experiment in serial.
-            run_active_learning_from_names(**experiment_kwargs)
-    
+            run_batch_active_learning_from_names(**exp_kwargs)
+
     # Submit experiments.
     if use_shephex is True:
         print(f"Number of experiments submitted: {len(experiment_list)}")

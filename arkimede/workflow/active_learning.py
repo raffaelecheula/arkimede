@@ -156,10 +156,10 @@ def run_active_learning(
     return atoms
 
 # -------------------------------------------------------------------------------------
-# RUN ACTIVE LEARNING LIST
+# RUN BATCH ACTIVE LEARNING
 # -------------------------------------------------------------------------------------
 
-def run_active_learning_list(
+def run_batch_active_learning(
     atoms_list: list,
     calculation: str,
     calc_MLP: Calculator,
@@ -387,10 +387,10 @@ def run_active_learning_from_names(
     write_atoms_to_db(atoms=atoms, db_ase=db_out, name=name, **db_out_kwargs)
 
 # -------------------------------------------------------------------------------------
-# RUN ACTIVE LEARNING LIST FROM NAMES
+# RUN BATCH ACTIVE LEARNING FROM NAMES
 # -------------------------------------------------------------------------------------
 
-def run_active_learning_list_from_names(
+def run_batch_active_learning_from_names(
     name_list: list,
     db_inp_name: str,
     db_out_name: str,
@@ -415,7 +415,7 @@ def run_active_learning_list_from_names(
     basedir: str = "",
 ):
     """
-    Run active learning calculation from name and input database.
+    Run batch active learning calculation from names and input database.
     """
     from mlps_finetuning.calculators import get_calculator, get_finetune_function
     # Get atoms from database.
@@ -430,8 +430,8 @@ def run_active_learning_list_from_names(
     calc_DFT = get_calculator(calc_name=calc_DFT_name, **calc_DFT_kwargs)
     # Get fine-tuning function.
     finetune_fun = get_finetune_function(calc_name=calc_MLP_name)
-    # Run active learning.
-    atoms_list = run_active_learning_list(
+    # Run batch active learning.
+    atoms_list = run_batch_active_learning(
         atoms_list=atoms_list,
         calculation=calculation,
         calc_MLP=calc_MLP,

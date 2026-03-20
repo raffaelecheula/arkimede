@@ -27,7 +27,7 @@ def get_idpp_interpolated_images(
     log: str = None, 
     optimizer: Optimizer = LBFGS,
     mic: bool = False,
-    steps_max: int = 1000,
+    max_steps: int = 1000,
     save_trajs: bool = False,
     from_atoms_info: bool = False,
 ) -> list:
@@ -46,7 +46,7 @@ def get_idpp_interpolated_images(
         fmax=fmax,
         optimizer=optimizer,
         mic=mic,
-        steps=steps_max,
+        steps=max_steps,
     )
     if save_trajs is True:
         from ase.io import Trajectory

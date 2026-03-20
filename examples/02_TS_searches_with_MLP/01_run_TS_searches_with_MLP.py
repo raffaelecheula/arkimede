@@ -60,27 +60,24 @@ def main():
         db_out_kwargs={**db_out_kwargs, "calculation": calculation_TS},
     )
 
-    # Run the calculations.
+    # Run the TS-search calculations.
     experiment_list = []
     for name in name_list:
-        # Experiment parameters.
-        experiment_kwargs = {
-            "name": name,
-            "db_inp_name": db_inp_name,
-            "db_out_name": db_out_name,
-            "calc_name": calc_name,
-            "calc_kwargs": calc_kwargs,
-            "calculation_TS": calculation_TS,
-            "run_relax_kwargs": run_relax_kwargs,
-            "run_NEB_kwargs": run_NEB_kwargs,
-            "run_TSsearch_kwargs": run_TSsearch_kwargs,
-            "check_IS_FS_kwargs": check_IS_FS_kwargs,
-            "n_restarts_TSsearch": n_restarts_TSsearch,
-            "db_inp_kwargs": db_inp_kwargs,
-            "basedir": os.getcwd(),
-        }
-        # Run experiment.
-        search_TS_from_names(**experiment_kwargs)
+        search_TS_from_names(
+            name=name,
+            db_inp_name=db_inp_name,
+            db_out_name=db_out_name,
+            calc_name=calc_name,
+            calc_kwargs=calc_kwargs,
+            calculation_TS=calculation_TS,
+            run_relax_kwargs=run_relax_kwargs,
+            run_NEB_kwargs=run_NEB_kwargs,
+            run_TSsearch_kwargs=run_TSsearch_kwargs,
+            check_IS_FS_kwargs=check_IS_FS_kwargs,
+            n_restarts_TSsearch=n_restarts_TSsearch,
+            db_inp_kwargs=db_inp_kwargs,
+            basedir=os.getcwd(),
+        )
 
 # -------------------------------------------------------------------------------------
 # IF NAME MAIN
