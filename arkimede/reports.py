@@ -58,6 +58,7 @@ def calculations_report(
     status_list: list,
     db_ase: Database,
     max_steps: int,
+    atoms_dict: dict = None,
     not_in_status_list: str = "other",
     excluded: list = [],
     percentages: bool = True,
@@ -70,8 +71,13 @@ def calculations_report(
     results_dict = {}
     success_steps_dict = {}
     for calculation in calculation_list:
-        # Read atoms from database.
-        atoms_list = get_atoms_list_from_db(db_ase=db_ase, calculation=calculation)
+        if atoms_dict is None:
+            # Read atoms from database.
+            atoms_list = get_atoms_list_from_db(db_ase=db_ase, calculation=calculation)
+        else:
+            # Get atoms list from atoms dictionary.
+            atoms_list = atoms_dict[calculation]
+        # Exclude calculations with names in the excluded list.
         atoms_list = [
             atoms for atoms in atoms_list if atoms.info["name"] not in excluded
         ]

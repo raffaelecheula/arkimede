@@ -154,7 +154,13 @@ def get_mode_TS_from_bonds_TS(
         index_a, index_b, sign_bond = bond
         if isinstance(sign_bond, str):
             sign_bond = sign_bond_dict[sign_bond]
-        dir_bond = atoms.positions[index_a] - atoms.positions[index_b]
+        dir_bond = atoms.get_distance(
+            a0=index_b,
+            a1=index_a,
+            mic=True,
+            vector=True,
+        )
+        dir_bond /= np.linalg.norm(dir_bond)
         mode_TS[index_a] += dir_bond * sign_bond
         mode_TS[index_b] -= dir_bond * sign_bond
     mode_TS /= np.linalg.norm(mode_TS)
@@ -184,6 +190,7 @@ def get_mode_TS_from_vibrations(
         indices_vib=indices_vib,
         vib_cache=vib_cache,
         clean_cache=clean_cache,
+        unit_masses=True,
         **kwargs,
     )
     # Return TS mode.

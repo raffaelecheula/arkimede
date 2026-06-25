@@ -42,6 +42,7 @@ def check_TS_relax_into_IS_and_FS(
     indices_check: list = "adsorbate",
     store_positions_relaxed: bool = False,
     label_dict: dict = {"forward": "fwd", "reverse": "rev"},
+    cutoffs_dict: dict = {},
     **kwargs: dict,
 ) -> bool:
     """
@@ -91,6 +92,7 @@ def check_TS_relax_into_IS_and_FS(
                 atoms_1=atoms_old_list[ii],
                 atoms_2=atoms_new_list[jj],
                 indices=indices_check,
+                cutoffs_dict=cutoffs_dict,
             )
             check_list.append(check)
         # Return True if both connectivities are the same as the old ones.

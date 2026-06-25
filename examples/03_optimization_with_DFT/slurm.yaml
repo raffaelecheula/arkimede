@@ -8,3 +8,4 @@ parameters:
 commands_pre_execution:
   - export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-1}
   - module load intel/2020.1 openmpi/4.0.3
+  - export PATH="$PATH:$HOME/espresso/qe-6.8/bin"

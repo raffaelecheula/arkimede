@@ -127,7 +127,6 @@ def search_TS_from_atoms_IS_and_FS(
     run_TSsearch_kwargs: dict = {},
     check_IS_FS_kwargs: dict = {},
     n_restarts_TSsearch: int = 0,
-    check_atoms_desorbed: bool = True,
     rattle_kwargs: dict = {},
 ):
     """
@@ -204,7 +203,6 @@ def search_TS_from_atoms_IS_and_FS(
             calculation_TS=calculation_TS,
             n_restarts_TSsearch=n_restarts_TSsearch,
             run_TSsearch_kwargs=run_TSsearch_kwargs,
-            check_atoms_desorbed=check_atoms_desorbed,
             check_IS_FS_kwargs=check_IS_FS_kwargs,
             rattle_kwargs=rattle_kwargs,
         )
@@ -233,7 +231,6 @@ def run_TSsearch_and_check(
     calculation_TS: str = "sella",
     n_restarts_TSsearch: int = 0,
     run_TSsearch_kwargs: dict = {},
-    check_atoms_desorbed: bool = True,
     check_IS_FS_kwargs: dict = {},
     rattle_kwargs: dict = {},
 ) -> None:
@@ -246,6 +243,7 @@ def run_TSsearch_and_check(
     )
     # Run TS-search calculation.
     number_generator = None
+    check_desorbed = check_IS_FS_kwargs.get("check_desorbed", False)
     atoms_TS_zero = atoms_TS.copy()
     run_TSsearch_kwargs_zero = run_TSsearch_kwargs.copy()
     for ii in range(n_restarts_TSsearch + 1):
@@ -253,12 +251,12 @@ def run_TSsearch_and_check(
         run_calculation(
             atoms=atoms_TS,
             calculation=calculation_TS,
-            bonds_TS=atoms_TS.info["bonds_TS"],
+            bonds_TS=atoms_TS.info.get("bonds_TS", []),
             calc=calc,
             **run_TSsearch_kwargs,
         )
         # Check if the atoms has desorbed.
-        if check_atoms_desorbed and atoms_TS.info["status"] == "finished":
+        if check_desorbed and atoms_TS.info["status"] == "finished":
             check = check_atoms_not_desorbed(atoms=atoms_TS)
             if check is False:
                 atoms_TS.info["status"] = "desorbed"

@@ -101,6 +101,21 @@ def get_indices_from_name(
         return [int(ii) for ii in indices]
 
 # -------------------------------------------------------------------------------------
+# SORT ATOMS
+# -------------------------------------------------------------------------------------
+
+def sort_atoms(
+    atoms: Atoms,
+) -> Atoms:
+    """
+    Sort atoms by their positions.
+    """
+    order = np.lexsort(
+        (atoms.positions[:, 0], atoms.positions[:, 1], atoms.positions[:, 2])
+    )
+    return atoms[order]
+
+# -------------------------------------------------------------------------------------
 # FILTER RESULTS
 # -------------------------------------------------------------------------------------
 
@@ -140,7 +155,6 @@ def filter_constraints(
 def update_atoms_from_atoms_opt(
     atoms: Atoms,
     atoms_opt: Atoms,
-    status: str,
     properties: list = all_properties,
     update_cell: bool = False,
 ):
@@ -157,9 +171,6 @@ def update_atoms_from_atoms_opt(
     atoms.calc = SinglePointCalculator(atoms=atoms, **results)
     # Update info.
     atoms.info.update(atoms_opt.info)
-    atoms.info["status"] = status
-    if "counter" in dir(atoms_opt.calc):
-        atoms.info["counter"] = atoms_opt.calc.counter
     # Return atoms.
     return atoms
 
@@ -201,6 +212,7 @@ def get_edges_list(
     atoms: Atoms,
     indices: list = None,
     dist_ratio_thr: float = 1.25,
+    cutoffs_dict: dict = {},
 ):
     """
     Get the edges for selected atoms in an ASE Atoms object.
@@ -213,14 +225,14 @@ def get_edges_list(
     indices = [int(ii) for ii in indices]
     # Get edges list.
     edges_list = []
-    cutoffs = natural_cutoffs(atoms=atoms)
+    cutoffs = natural_cutoffs(atoms=atoms, **cutoffs_dict)
     for combo in combinations(list(indices), 2):
-        total_distance = atoms.get_distance(combo[0], combo[1], mic=True)
+        distance = atoms.get_distance(a0=combo[0], a1=combo[1], mic=True)
         r1 = cutoffs[combo[0]]
         r2 = cutoffs[combo[1]]
-        distance_ratio = total_distance / (r1 + r2)
+        distance_ratio = distance / (r1 + r2)
         if distance_ratio <= dist_ratio_thr:
-            edges_list.append([int(ii) for ii in combo])
+            edges_list.append(sorted([int(ii) for ii in combo]))
     # Return edges list.
     return edges_list
 
@@ -233,6 +245,7 @@ def get_connectivity(
     edges_list: list = None,
     indices: list = None,
     dist_ratio_thr: float = 1.25,
+    cutoffs_dict: dict = {},
 ):
     """
     Get the connectivity matrix for selected atoms in an ASE Atoms object.
@@ -243,6 +256,7 @@ def get_connectivity(
             atoms=atoms,
             indices=indices,
             dist_ratio_thr=dist_ratio_thr,
+            cutoffs_dict=cutoffs_dict,
         )
     # Populate connectivity matrix.
     matrix = np.zeros((len(atoms), len(atoms)))
@@ -260,6 +274,7 @@ def check_same_connectivity(
     atoms_1: Atoms,
     atoms_2: Atoms,
     indices: list = "all",
+    cutoffs_dict: dict = {},
 ):
     """
     Check if two structures have the same connectivity.
@@ -267,8 +282,16 @@ def check_same_connectivity(
     # Get indices of atoms to check.
     indices = get_indices_from_name(atoms=atoms_1, indices=indices)
     # Get connectivity matrices.
-    connectivity_1 = get_connectivity(atoms=atoms_1, indices=indices)
-    connectivity_2 = get_connectivity(atoms=atoms_2, indices=indices)
+    connectivity_1 = get_connectivity(
+        atoms=atoms_1,
+        indices=indices,
+        cutoffs_dict=cutoffs_dict,
+    )
+    connectivity_2 = get_connectivity(
+        atoms=atoms_2,
+        indices=indices,
+        cutoffs_dict=cutoffs_dict,
+    )
     # Return comparison.
     return bool((connectivity_1 == connectivity_2).all())
 

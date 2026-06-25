@@ -31,11 +31,13 @@ def min_steps_obs(
 def max_forcecalls_obs(
     opt: Optimizer,
     max_forcecalls: int,
-    calc: Calculator,
+    calc: Calculator = None,
 ):
     """
     Observer setting a maximum number of forces calls.
     """
+    if calc is None:
+        calc = opt.atoms.calc
     if "counter" in dir(calc) and calc.counter > max_forcecalls:
         opt.max_steps = 0
 
@@ -101,7 +103,7 @@ def atoms_too_close_obs(
     Observer stopping the calculation when two atoms are too close to each other.
     """
     for ii, position in enumerate(atoms.positions):
-        distances = np.linalg.norm(atoms.positions[ii+1:] - position, axis=1)
+        distances = np.linalg.norm(atoms.positions[ii + 1:] - position, axis=1)
         duplicates = np.where(distances < mindist)[0]
         if len(duplicates) > 0:
             raise RuntimeError("atoms too close")

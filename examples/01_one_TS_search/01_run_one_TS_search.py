@@ -26,7 +26,7 @@ def main():
     calculation_TS = "sella-ba" # neb | dimer | climbfixint | sella | sella-ba
     neb_steps = 0 # Number of NEB steps to run before the TS-search.
     n_restarts_TSsearch = 0 # Number of restarts in case the TS-search fails.
-    use_hessian_function = True # Set function to get the Hessian when using Sella.
+    use_hessian_function = False # Set function to get the Hessian when using Sella.
     save_trajs = True # Save trajectory files of the calculations.
     directory = "trajectories" # Directory to save the trajectory files.
 
@@ -50,6 +50,7 @@ def main():
         "fmax": 0.05, # Forces convergence threshold [eV/Å].
         "max_steps": 500, # Maximum number of steps in the TS-search calculation.
         "max_forcecalls": 1000, # Maximum number of force calls.
+        "opt_kwargs": {}, # Keyword arguments for the TS-search optimizer.
         "save_trajs": save_trajs,
         "directory": directory,
     }
@@ -64,6 +65,7 @@ def main():
         "method": "vibrations", # Method to find the TS mode after the TS-search.
         "indices_vib": "adsorbate", # Indices of atoms to displace to get the Hessian.
         "indices_check": "adsorbate", # Indices of atoms to match the connectivity.
+        "check_desorbed": True, # Check if the adsorbate has desorbed.
         "save_trajs": save_trajs,
         "directory": directory,
     }
@@ -90,7 +92,7 @@ def main():
     if use_hessian_function is True:
         from arkimede.workflow.sella import get_hessian_from_vibrations_fun
         hessian_function = get_hessian_from_vibrations_fun(**hessian_kwargs)
-        run_TSsearch_kwargs["opt_kwargs"] = {"hessian_function": hessian_function}
+        run_TSsearch_kwargs["opt_kwargs"]["hessian_function"] = hessian_function
 
     # Run the TS-search workflow.
     atoms_TS = search_TS_from_atoms_IS_and_FS(

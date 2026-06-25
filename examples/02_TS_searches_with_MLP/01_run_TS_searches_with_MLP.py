@@ -50,6 +50,7 @@ def main():
     check_IS_FS_kwargs = {
         "method": "vibrations",
         "indices_check": "adsorbate",
+        "check_desorbed": True,
     }
 
     # Get names of calculations to run.
