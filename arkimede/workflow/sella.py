@@ -211,6 +211,10 @@ def modify_hessian_obs(
     if smooth_thr is True:
         p_exp = 2 + 1 / (1 - dot_prod_thr) ** 2
         dot_prod_thr = (dot_prod ** p_exp + dot_prod_thr ** p_exp) ** (1 / p_exp)
+        # The smoothed threshold cannot be reached if it is not lower than one
+        # (the lowest mode is already aligned with the TS bonds).
+        if dot_prod_thr >= 1.0:
+            return
     # Modify Hessian.
     outer = np.outer(vector, vector)
     for ii in range(iter_max):
