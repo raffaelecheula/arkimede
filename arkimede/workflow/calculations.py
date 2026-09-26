@@ -586,7 +586,11 @@ def run_sella_calculation(
     warnings.filterwarnings("ignore", message=".*CUDA.*")
     logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
     from sella import Sella
-    from arkimede.workflow.sella import modify_hessian_obs, get_internals
+    from arkimede.workflow.sella import (
+        modify_hessian_obs,
+        get_internals,
+        get_hessian_array,
+    )
     # Get TS bonds from info dictionary.
     if bonds_TS is None:
         bonds_TS = atoms.info.get("bonds_TS", None)
@@ -662,8 +666,10 @@ def run_sella_calculation(
             update_cell=update_cell,
         )
     # Store Hessian.
-    if store_hessian is True and opt.pes.H.B is not None:
-        atoms.info["hessian"] = opt.pes.H.B.copy()
+    if store_hessian is True:
+        hessian = get_hessian_array(opt=opt)
+        if hessian is not None:
+            atoms.info["hessian"] = hessian
     # Write image.
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
