@@ -575,10 +575,12 @@ def run_sella_calculation(
     max_force_tot: float = None,
     max_forcecalls: int = None,
     reset_counter: bool = True,
+    modify_hessian_kwargs: dict = {},
     **kwargs: dict,
 ) -> None:
     """
-    Run a Sella TS-search calculation.
+    Run a Sella TS-search calculation. Additional arguments of the observer that
+    modifies the Hessian (modify_hessian_obs) can be passed with modify_hessian_kwargs.
     """
     import warnings
     import logging
@@ -626,7 +628,12 @@ def run_sella_calculation(
     )
     # Observer that modifies the hessian adding curvature to TS bonds.
     if modify_hessian is True:
-        obs_kwargs = {"opt": opt, "bonds_TS": bonds_TS, "dot_prod_thr": dot_prod_thr}
+        obs_kwargs = {
+            "opt": opt,
+            "bonds_TS": bonds_TS,
+            "dot_prod_thr": dot_prod_thr,
+            **modify_hessian_kwargs,
+        }
         opt.attach(modify_hessian_obs, interval=1, **obs_kwargs)
     # Observer that checks the displacement of the TS from the starting position.
     if max_displ is not None:
