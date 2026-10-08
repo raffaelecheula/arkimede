@@ -6,6 +6,7 @@ import os
 import uuid
 import shutil
 import numpy as np
+from typing import Optional
 from ase import Atoms
 from ase.optimize.optimize import Optimizer
 
@@ -127,6 +128,37 @@ def get_hessian_from_input_fun(
     return hessian_from_input
 
 # -------------------------------------------------------------------------------------
+# GET HESSIAN ARRAY
+# -------------------------------------------------------------------------------------
+
+def get_hessian_array(
+    opt: Optimizer,
+) -> Optional[np.ndarray]:
+    """
+    Get a copy of the current Hessian matrix of a Sella optimizer, or None if the
+    Hessian is not initialized. The matrix is read with the public asarray() method,
+    which also works when Sella keeps the Hessian on the GPU (and the B attribute is
+    None). For older Sella versions, the B attribute is used.
+    """
+    approx_hessian = opt.pes.H
+    # Check if the Hessian is initialized (asarray() returns an identity matrix
+    # for uninitialized Hessians).
+    initialized = getattr(approx_hessian, "initialized", None)
+    if initialized is None:
+        initialized = getattr(approx_hessian, "B", None) is not None
+    if not initialized:
+        return None
+    # Get the Hessian matrix.
+    if callable(getattr(approx_hessian, "asarray", None)):
+        hessian = approx_hessian.asarray()
+    else:
+        hessian = getattr(approx_hessian, "B", None)
+    if hessian is None:
+        return None
+    # Return a copy of the Hessian matrix.
+    return np.array(hessian, copy=True)
+
+# -------------------------------------------------------------------------------------
 # MODIFY HESSIAN OBS
 # -------------------------------------------------------------------------------------
 
@@ -144,7 +176,7 @@ def modify_hessian_obs(
     correspondance of the TS bonds.
     """
     # Get Hessian.
-    hessian = opt.pes.H.B
+    hessian = get_hessian_array(opt=opt)
     if hessian is None or bonds_TS is None or dot_prod_thr == 0.:
         return
     # Get bonds vector.
@@ -179,6 +211,10 @@ def modify_hessian_obs(
     if smooth_thr is True:
         p_exp = 2 + 1 / (1 - dot_prod_thr) ** 2
         dot_prod_thr = (dot_prod ** p_exp + dot_prod_thr ** p_exp) ** (1 / p_exp)
+        # The smoothed threshold cannot be reached if it is not lower than one
+        # (the lowest mode is already aligned with the TS bonds).
+        if dot_prod_thr >= 1.0:
+            return
     # Modify Hessian.
     outer = np.outer(vector, vector)
     for ii in range(iter_max):
