@@ -48,15 +48,23 @@ def check_TS_relax_into_IS_and_FS(
     """
     Relax the TS atoms in two direction and check if the new structures have the
     same connectivity as the original IS and FS atoms.
+
+    With method="irc", the forward and reverse IRC calculations are run with the same
+    IRC object (see run_irc_both_directions), so that they leave the TS in opposite
+    directions. Two separate IRC calculations do not guarantee this.
     """
     from arkimede.workflow.recipes import run_calculation
+    from arkimede.workflow.calculations import run_irc_both_directions
     from arkimede.workflow.transition_states import get_displaced_atoms_from_atoms_TS
     from arkimede.utilities import check_same_connectivity
-    # Get displaced atoms.
     if method == "irc":
-        # IRC method.
-        calculation = "irc"
-        atoms_displaced = [atoms_TS.copy(), atoms_TS.copy()]
+        # IRC method (forward and reverse runs with the same IRC object).
+        atoms_new_list = run_irc_both_directions(
+            atoms=atoms_TS,
+            calc=calc,
+            label_dict=label_dict,
+            **kwargs,
+        )
     else:
         # Relax displaced atoms.
         calculation = "relax"
@@ -66,18 +74,18 @@ def check_TS_relax_into_IS_and_FS(
             calc=calc,
             **kwargs,
         )
-    # Run calculations.
-    atoms_new_list = []
-    for atoms, direction in zip(atoms_displaced, ["forward", "reverse"]):
-        kwargs_ii = {"label": f"{calculation}_{label_dict[direction]}", **kwargs}
-        run_calculation(
-            atoms=atoms,
-            calc=calc,
-            calculation=calculation,
-            direction=direction,
-            **kwargs_ii,
-        )
-        atoms_new_list.append(atoms)
+        # Run calculations.
+        atoms_new_list = []
+        for atoms, direction in zip(atoms_displaced, ["forward", "reverse"]):
+            kwargs_ii = {"label": f"{calculation}_{label_dict[direction]}", **kwargs}
+            run_calculation(
+                atoms=atoms,
+                calc=calc,
+                calculation=calculation,
+                direction=direction,
+                **kwargs_ii,
+            )
+            atoms_new_list.append(atoms)
     # Store positions of relaxed atoms in atoms info.
     if store_positions_relaxed is True:
         atoms_TS.info["positions_relaxed"] = [

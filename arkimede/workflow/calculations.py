@@ -710,7 +710,48 @@ def run_irc_calculation(
 ) -> None:
     """
     Run a Sella IRC calculation.
+
+    The direction can be "forward", "reverse", or "both". Two separate calculations
+    with "forward" and "reverse" are not guaranteed to leave the TS in opposite
+    directions: each one diagonalizes the Hessian at the TS, and Sella fixes the
+    sign of the initial displacement by making its first non-zero component
+    positive. For slabs with fixed atoms, this component can be numerical noise, and
+    both calculations can follow the same side of the barrier. With "both", the two
+    directions are run with the same IRC object (see run_irc_both_directions). The
+    input atoms are then never moved, also with copy_atoms=False, and the positions
+    and status of the forward and reverse end points are stored in
+    atoms.info["positions_irc"] and atoms.info["status_irc"]. The complete results
+    of each direction are returned by run_irc_both_directions.
     """
+    # Run both directions with the same IRC object.
+    if direction == "both":
+        atoms_irc_list = run_irc_both_directions(
+            atoms=atoms,
+            calc=calc,
+            fmax=fmax,
+            max_steps=max_steps,
+            min_steps=min_steps,
+            logfile=logfile,
+            label=label,
+            directory=directory,
+            trajectory=trajectory,
+            save_trajs=save_trajs,
+            write_images=write_images,
+            update_cell=update_cell,
+            properties=properties,
+            keep_going=keep_going,
+            opt_kwargs=opt_kwargs,
+            max_forcecalls=max_forcecalls,
+            reset_counter=reset_counter,
+            **kwargs,
+        )
+        atoms.info["positions_irc"] = [
+            atoms_irc.positions.copy() for atoms_irc in atoms_irc_list
+        ]
+        atoms.info["status_irc"] = [
+            atoms_irc.info["status"] for atoms_irc in atoms_irc_list
+        ]
+        return
     import warnings
     import logging
     warnings.filterwarnings("ignore", message=".*TPU.*")
@@ -771,6 +812,151 @@ def run_irc_calculation(
     if write_images is True:
         filename = os.path.join(directory, f"{label}.png")
         atoms.write(filename, radii=0.9, scale=200)
+
+# -------------------------------------------------------------------------------------
+# RUN IRC BOTH DIRECTIONS
+# -------------------------------------------------------------------------------------
+
+def run_irc_both_directions(
+    atoms: Atoms,
+    calc: Calculator,
+    fmax: float = 0.05,
+    max_steps: int = 500,
+    min_steps: int = None,
+    logfile: str = "-",
+    label: str = "irc",
+    directory: str = ".",
+    trajectory: dict = None,
+    save_trajs: bool = False,
+    write_images: bool = False,
+    update_cell: bool = False,
+    properties: list = ["energy", "forces"],
+    keep_going: bool = True,
+    opt_kwargs: dict = {},
+    max_forcecalls: int = None,
+    reset_counter: bool = True,
+    label_dict: dict = {"forward": "fwd", "reverse": "rev"},
+    **kwargs: dict,
+) -> list:
+    """
+    Run a Sella IRC calculation in the forward and reverse directions with the same
+    IRC object, and return the end points as a list [forward, reverse].
+
+    The Hessian at the TS is diagonalized once. The reverse run restores this
+    diagonalization and starts along exactly the negative of the initial forward
+    displacement, which two separate IRC calculations do not guarantee.
+    The input atoms are not modified. Each end point is a copy of the input atoms
+    updated with the results of its direction (positions, calculator results, and
+    atoms.info["status"] and ["counter"]).
+    The steps are counted from zero in each direction, so max_steps and min_steps
+    apply to each direction. If reset_counter is True, the calculator counter is
+    reset at the start of each direction, so max_forcecalls and the stored counter
+    also apply to each direction (the forward one includes the diagonalization).
+    The trajectory files are named "{label}_{label_dict[direction]}.traj", or can
+    be given as a dictionary with "forward" and "reverse" keys (file names or
+    TrajectoryWriter objects). Each trajectory starts with the TS and contains only
+    the images of its direction.
+    """
+    import warnings
+    import logging
+    warnings.filterwarnings("ignore", message=".*TPU.*")
+    warnings.filterwarnings("ignore", message=".*CUDA.*")
+    logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
+    from sella import IRC
+    # Create directory to store the results.
+    if save_trajs is True or write_images is True:
+        os.makedirs(directory, exist_ok=True)
+    # Prepare a copy of atoms.
+    atoms_opt = atoms.copy()
+    if calc is not None:
+        atoms_opt.calc = calc
+    # Status and counter of the input atoms, restored at the start of each direction.
+    info_keys = ("status", "counter")
+    info_zero = {key: atoms_opt.info[key] for key in info_keys if key in atoms_opt.info}
+    # Names of the trajectory files.
+    if trajectory is None:
+        trajectory = {
+            direction: (
+                os.path.join(directory, f"{label}_{label_dict[direction]}.traj")
+                if save_trajs else None
+            ) for direction in ("forward", "reverse")
+        }
+    elif not isinstance(trajectory, dict):
+        raise ValueError(
+            'trajectory must be a dictionary with "forward" and "reverse" keys.'
+        )
+    # Set up the IRC optimizer (the trajectories are written for each direction).
+    opt = IRC(
+        atoms=atoms_opt,
+        trajectory=None,
+        logfile=logfile,
+        keep_going=keep_going,
+        **opt_kwargs,
+    )
+    # Observer to set a minimum number of steps.
+    if min_steps is not None:
+        obs_kwargs = {"opt": opt, "min_steps": min_steps, "fmax": fmax}
+        opt.attach(min_steps_obs, interval=1, **obs_kwargs)
+    # Observer to set a maximum of forces calls.
+    if max_forcecalls is not None:
+        obs_kwargs = {"opt": opt, "max_forcecalls": max_forcecalls}
+        opt.attach(max_forcecalls_obs, interval=1, **obs_kwargs)
+    # Run the forward and then the reverse direction.
+    atoms_irc_list = []
+    for direction in ("forward", "reverse"):
+        # Count the steps from zero, so that the step limits apply to each direction
+        # and the observers receive the TS as the first image.
+        opt.nsteps = 0
+        # Reset the number of calculator calls.
+        if "counter" in dir(atoms_opt.calc) and reset_counter is True:
+            atoms_opt.calc.counter = 0
+        # Restore the status and counter of the input atoms, so that the images of
+        # this direction do not carry those of the previous direction.
+        for key in info_keys:
+            atoms_opt.info.pop(key, None)
+        atoms_opt.info.update(info_zero)
+        # Observer that writes the images of this direction to its trajectory.
+        traj = trajectory.get(direction)
+        if traj is not None and not isinstance(traj, TrajectoryWriter):
+            traj = TrajectoryWriter(filename=traj, mode="w")
+        if traj is not None:
+            opt.attach(traj, interval=1, atoms=atoms_opt)
+            traj_observer = opt.observers[-1]
+        # Run the optimization.
+        if direction == "reverse" and opt.v0ts is None:
+            # The forward run failed before setting the initial displacement.
+            atoms_opt.info["status"] = "failed"
+        else:
+            atoms_opt.info["status"] = run_optimization(
+                opt=opt,
+                fmax=fmax,
+                max_steps=max_steps,
+                min_steps=min_steps,
+                run_kwargs={"direction": direction},
+            )
+        # Remove the trajectory observer.
+        if traj is not None:
+            opt.observers.remove(traj_observer)
+            if traj is not trajectory.get(direction):
+                traj.close()
+        # Store the number of calculator calls.
+        if "counter" in dir(atoms_opt.calc):
+            atoms_opt.info["counter"] = atoms_opt.calc.counter
+        # Store the end point of this direction in a copy of the input atoms.
+        atoms_irc = atoms.copy()
+        update_atoms_from_atoms_opt(
+            atoms=atoms_irc,
+            atoms_opt=atoms_opt,
+            properties=properties,
+            update_cell=update_cell,
+        )
+        atoms_irc_list.append(atoms_irc)
+        # Write image.
+        if write_images is True:
+            filename = os.path.join(directory, f"{label}_{label_dict[direction]}.png")
+            atoms_irc.write(filename, radii=0.9, scale=200)
+    # Return the end points.
+    return atoms_irc_list
 
 # -------------------------------------------------------------------------------------
 # RUN VIBRATIONS CALCULATION
